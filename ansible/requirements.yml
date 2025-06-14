@@ -1,0 +1,45 @@
+---
+# Edge AI DevOps Portfolio - Ansible Requirements
+# Dependencies for infrastructure testing and automation
+
+collections:
+  # Kubernetes collection for cluster management
+  - name: kubernetes.core
+    version: ">=2.4.0"
+    source: https://galaxy.ansible.com
+
+  # Community general utilities
+  - name: community.general
+    version: ">=7.0.0"
+    source: https://galaxy.ansible.com
+
+  # Docker collection for container management
+  - name: community.docker
+    version: ">=3.4.0"
+    source: https://galaxy.ansible.com
+
+  # Prometheus monitoring
+  - name: prometheus.prometheus
+    version: ">=0.13.0"
+    source: https://galaxy.ansible.com
+
+  # Grafana dashboards
+  - name: community.grafana
+    version: ">=1.5.0"
+    source: https://galaxy.ansible.com
+
+  # POSIX utilities
+  - name: ansible.posix
+    version: ">=1.5.0"
+    source: https://galaxy.ansible.com
+
+roles:
+  # Infrastructure validation role (if needed)
+  # - name: infrastructure-validator
+  #   src: https://github.com/ansible-roles/infrastructure-validator
+  #   version: main
+
+  # Security scanning role (if needed)
+  # - name: security-scanner
+  #   src: https://github.com/ansible-roles/security-scanner
+  #   version: main

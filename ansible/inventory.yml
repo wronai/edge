@@ -1,0 +1,194 @@
+---
+# Edge AI DevOps Portfolio - Ansible Inventory
+# Defines target hosts and groups for infrastructure testing
+
+all:
+  children:
+    # Local development environment
+    local:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+          # Deployment configuration
+          deployment_mode: "k3s"  # k3s, kind, or local
+          project_root: "{{ playbook_dir }}/.."
+
+          # Service endpoints for testing
+          endpoints:
+            ai_gateway: "http://localhost:30080"
+            prometheus: "http://localhost:30090"
+            grafana: "http://localhost:30030"
+            ollama_direct: "http://localhost:11435"
+            onnx_direct: "http://localhost:8001"
+
+          # Expected service configuration
+          expected_services:
+            kubernetes:
+              namespaces:
+                - ai-inference
+                - monitoring
+              ai_deployments:
+                - name: onnx-inference
+                  namespace: ai-inference
+                  min_replicas: 1
+                - name: ollama-llm
+                  namespace: ai-inference
+                  min_replicas: 1
+                - name: ai-gateway
+                  namespace: ai-inference
+                  min_replicas: 1
+              monitoring_deployments:
+                - name: prometheus
+                  namespace: monitoring
+                  min_replicas: 1
+                - name: grafana
+                  namespace: monitoring
+                  min_replicas: 1
+
+            docker_compose:
+              services:
+                - ollama
+                - onnx-runtime
+                - prometheus
+                - grafana
+
+          # Test configuration
+          test_config:
+            timeout: 300
+            retry_count: 5
+            retry_delay: 10
+
+            # AI test prompts
+            ai_tests:
+              - model: "llama3.2:1b"
+                prompt: "Hello, this is a test"
+                timeout: 60
+              - model: "edge-ai-assistant"
+                prompt: "What is edge computing?"
+                timeout: 90
+
+            # Performance thresholds
+            performance_thresholds:
+              response_time_max: 5000  # milliseconds
+              memory_usage_max: 4096   # MB
+              cpu_usage_max: 80        # percentage
+
+            # Health check endpoints
+            health_checks:
+              - url: "/health"
+                expected_status: 200
+              - url: "/api/tags"
+                expected_status: 200
+              - url: "/v1/models"
+                expected_status: 200
+              - url: "/-/healthy"
+                expected_status: 200
+              - url: "/api/health"
+                expected_status: 200
+
+    # Edge computing nodes (for future multi-node testing)
+    edge_nodes:
+      hosts:
+        # edge-node-1:
+        #   ansible_host: 192.168.1.10
+        #   ansible_user: ubuntu
+        #   node_role: worker
+        #   node_location: factory-floor
+        #
+        # edge-node-2:
+        #   ansible_host: 192.168.1.11
+        #   ansible_user: ubuntu
+        #   node_role: worker
+        #   node_location: warehouse
+      vars:
+        # Edge-specific configuration
+        deployment_mode: "k3s"
+        resource_constraints:
+          memory_limit: "2Gi"
+          cpu_limit: "1000m"
+
+        # Edge services
+        edge_services:
+          - ollama-llm
+          - onnx-inference
+          - monitoring-agent
+
+    # Production environment (template for real deployments)
+    production:
+      hosts:
+        # prod-master:
+        #   ansible_host: prod-master.example.com
+        #   ansible_user: admin
+        #   node_role: master
+        #
+        # prod-worker-1:
+        #   ansible_host: prod-worker-1.example.com
+        #   ansible_user: admin
+        #   node_role: worker
+      vars:
+        deployment_mode: "k3s"
+        enable_tls: true
+        enable_rbac: true
+        enable_monitoring: true
+
+        # Production thresholds
+        performance_thresholds:
+          response_time_max: 2000
+          memory_usage_max: 8192
+          cpu_usage_max: 70
+          availability_min: 99.5
+
+# Global variables for all hosts
+all:
+  vars:
+    # Project metadata
+    project_name: "edge-ai-devops-portfolio"
+    project_version: "1.0.0"
+    author: "Tom Sapletta"
+
+    # Common paths
+    kubeconfig_path: "{{ project_root }}/kubeconfig/kubeconfig.yaml"
+    terraform_path: "{{ project_root }}/terraform"
+    manifests_path: "{{ project_root }}/k8s"
+    configs_path: "{{ project_root }}/configs"
+    scripts_path: "{{ project_root }}/scripts"
+
+    # Default timeouts and retries
+    default_timeout: 30
+    default_retries: 3
+    default_delay: 5
+
+    # Container images
+    container_images:
+      ollama: "ollama/ollama:latest"
+      onnx_runtime: "mcr.microsoft.com/onnxruntime/server:latest"
+      prometheus: "prom/prometheus:latest"
+      grafana: "grafana/grafana:latest"
+      k3s: "rancher/k3s:v1.28.4-k3s2"
+      nginx: "nginx:1.25-alpine"
+
+    # Security settings
+    security:
+      enable_rbac: true
+      enable_network_policies: true
+      enable_pod_security_standards: true
+      run_as_non_root: true
+      read_only_root_filesystem: true
+
+    # Resource defaults
+    resource_defaults:
+      cpu_request: "100m"
+      memory_request: "128Mi"
+      cpu_limit: "500m"
+      memory_limit: "512Mi"
+
+    # Monitoring configuration
+    monitoring:
+      scrape_interval: "15s"
+      evaluation_interval: "15s"
+      retention: "15d"
+      enable_alerts: true
+
+    # Logging configuration

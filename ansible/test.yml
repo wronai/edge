@@ -1,0 +1,617 @@
+---
+# Edge AI DevOps Portfolio - Ansible Infrastructure Tests
+# Comprehensive testing playbook for validating deployment
+# Author: Tom Sapletta - DevOps Engineer
+
+- name: Edge AI Infrastructure Testing Suite
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # Test configuration
+    test_timeout: 300
+    retry_delay: 10
+    max_retries: 5
+
+    # Service endpoints
+    ai_gateway_url: "http://localhost:30080"
+    prometheus_url: "http://localhost:30090"
+    grafana_url: "http://localhost:30030"
+    ollama_direct_url: "http://localhost:11435"
+    onnx_direct_url: "http://localhost:8001"
+
+    # Expected services in Kubernetes
+    expected_namespaces:
+      - ai-inference
+      - monitoring
+
+    ai_services:
+      - name: onnx-inference
+        namespace: ai-inference
+        replicas: 2
+      - name: ollama-llm
+        namespace: ai-inference
+        replicas: 1
+      - name: ai-gateway
+        namespace: ai-inference
+        replicas: 2
+
+    monitoring_services:
+      - name: prometheus
+        namespace: monitoring
+        replicas: 1
+      - name: grafana
+        namespace: monitoring
+        replicas: 1
+
+    # Test data for AI services
+    test_prompts:
+      - model: "llama3.2:1b"
+        prompt: "Hello, test response"
+        expected_keys: ["response", "model"]
+      - model: "edge-ai-assistant"
+        prompt: "What is DevOps?"
+        expected_keys: ["response"]
+
+  tasks:
+    # ============================================================================
+    # PRE-FLIGHT CHECKS
+    # ============================================================================
+
+    - name: "🔍 Pre-flight - Check required tools"
+      block:
+        - name: Check if kubectl is available
+          command: kubectl version --client
+          register: kubectl_check
+          failed_when: kubectl_check.rc != 0
+
+        - name: Check if docker is running
+          command: docker info
+          register: docker_check
+          failed_when: docker_check.rc != 0
+
+        - name: Check if curl is available
+          command: curl --version
+          register: curl_check
+          failed_when: curl_check.rc != 0
+
+        - name: Check if jq is available
+          command: jq --version
+          register: jq_check
+          failed_when: jq_check.rc != 0
+
+      rescue:
+        - name: Display missing tool error
+          fail:
+            msg: "Required tool is missing. Please install kubectl, docker, curl, and jq"
+
+    - name: "📊 Pre-flight - Display system information"
+      debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Memory: {{ (ansible_memory_mb.real.total/1024)|round|int }} GB"
+          - "CPU Cores: {{ ansible_processor_vcpus }}"
+          - "Docker version: {{ docker_check.stdout_lines[0] | default('Unknown') }}"
+
+    # ============================================================================
+    # INFRASTRUCTURE LAYER TESTS
+    # ============================================================================
+
+    - name: "🏗️ Infrastructure - Test Docker containers"
+      block:
+        - name: Get running Docker containers
+          command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          register: docker_containers
+
+        - name: Display Docker containers
+          debug:
+            msg: "{{ docker_containers.stdout_lines }}"
+
+        - name: Check for K3s server container
+          command: docker ps --filter "name=k3s-server" --format "{{.Status}}"
+          register: k3s_status
+
+        - name: Validate K3s container is running
+          assert:
+            that:
+              - "'Up' in k3s_status.stdout"
+            fail_msg: "K3s server container is not running"
+            success_msg: "✅ K3s server container is healthy"
+          when: k3s_status.stdout != ""
+
+      rescue:
+        - name: K3s container check failed
+          debug:
+            msg: "⚠️ K3s container not found - might be using alternative deployment"
+
+    - name: "☸️ Infrastructure - Test Kubernetes cluster"
+      block:
+        - name: Set kubeconfig path
+          set_fact:
+            kubeconfig_path: "{{ playbook_dir }}/../kubeconfig/kubeconfig.yaml"
+
+        - name: Check if kubeconfig exists
+          stat:
+            path: "{{ kubeconfig_path }}"
+          register: kubeconfig_stat
+
+        - name: Test cluster connectivity
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Node
+            kubeconfig: "{{ kubeconfig_path }}"
+          register: cluster_nodes
+          when: kubeconfig_stat.stat.exists
+
+        - name: Display cluster nodes
+          debug:
+            msg: "Cluster has {{ cluster_nodes.resources | length }} node(s)"
+          when: cluster_nodes is defined
+
+        - name: Validate cluster has nodes
+          assert:
+            that:
+              - cluster_nodes.resources | length > 0
+            fail_msg: "No nodes found in cluster"
+            success_msg: "✅ Kubernetes cluster is accessible"
+          when: cluster_nodes is defined
+
+      rescue:
+        - name: Kubernetes connectivity failed
+          debug:
+            msg: "⚠️ Kubernetes cluster not accessible - checking Docker Compose mode"
+
+    # ============================================================================
+    # NAMESPACE AND WORKLOAD TESTS
+    # ============================================================================
+
+    - name: "📦 Workloads - Test Kubernetes namespaces"
+      block:
+        - name: Check required namespaces exist
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Namespace
+            name: "{{ item }}"
+            kubeconfig: "{{ kubeconfig_path }}"
+          register: namespace_check
+          loop: "{{ expected_namespaces }}"
+          when: kubeconfig_stat.stat.exists
+
+        - name: Validate namespaces
+          assert:
+            that:
+              - item.resources | length > 0
+            fail_msg: "Namespace {{ item.item }} not found"
+            success_msg: "✅ Namespace {{ item.item }} exists"
+          loop: "{{ namespace_check.results }}"
+          when: namespace_check is defined and not item.skipped | default(false)
+
+      when: kubeconfig_stat.stat.exists
+
+    - name: "🤖 Workloads - Test AI service deployments"
+      block:
+        - name: Check AI service deployments
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: "{{ item.name }}"
+            namespace: "{{ item.namespace }}"
+            kubeconfig: "{{ kubeconfig_path }}"
+          register: ai_deployments
+          loop: "{{ ai_services }}"
+
+        - name: Validate AI deployments are ready
+          assert:
+            that:
+              - item.resources[0].status.readyReplicas | default(0) >= 1
+            fail_msg: "Deployment {{ item.item.name }} is not ready"
+            success_msg: "✅ Deployment {{ item.item.name }} has {{ item.resources[0].status.readyReplicas | default(0) }} ready replicas"
+          loop: "{{ ai_deployments.results }}"
+          when: ai_deployments is defined and item.resources | length > 0
+
+      when: kubeconfig_stat.stat.exists
+
+    - name: "📊 Workloads - Test monitoring deployments"
+      block:
+        - name: Check monitoring service deployments
+          kubernetes.core.k8s_info:
+            api_version: apps/v1
+            kind: Deployment
+            name: "{{ item.name }}"
+            namespace: "{{ item.namespace }}"
+            kubeconfig: "{{ kubeconfig_path }}"
+          register: monitoring_deployments
+          loop: "{{ monitoring_services }}"
+
+        - name: Validate monitoring deployments
+          assert:
+            that:
+              - item.resources[0].status.readyReplicas | default(0) >= 1
+            fail_msg: "Deployment {{ item.item.name }} is not ready"
+            success_msg: "✅ Deployment {{ item.item.name }} is healthy"
+          loop: "{{ monitoring_deployments.results }}"
+          when: monitoring_deployments is defined and item.resources | length > 0
+
+      when: kubeconfig_stat.stat.exists
+
+    # ============================================================================
+    # NETWORK AND CONNECTIVITY TESTS
+    # ============================================================================
+
+    - name: "🌐 Network - Test external service endpoints"
+      block:
+        - name: Test AI Gateway health endpoint
+          uri:
+            url: "{{ ai_gateway_url }}/health"
+            method: GET
+            timeout: 30
+          register: gateway_health
+          retries: "{{ max_retries }}"
+          delay: "{{ retry_delay }}"
+
+        - name: Test Prometheus health endpoint
+          uri:
+            url: "{{ prometheus_url }}/-/healthy"
+            method: GET
+            timeout: 30
+          register: prometheus_health
+          retries: "{{ max_retries }}"
+          delay: "{{ retry_delay }}"
+
+        - name: Test Grafana health endpoint
+          uri:
+            url: "{{ grafana_url }}/api/health"
+            method: GET
+            timeout: 30
+          register: grafana_health
+          retries: "{{ max_retries }}"
+          delay: "{{ retry_delay }}"
+
+        - name: Display endpoint health status
+          debug:
+            msg:
+              - "AI Gateway: {{ gateway_health.status | default('FAILED') }}"
+              - "Prometheus: {{ prometheus_health.status | default('FAILED') }}"
+              - "Grafana: {{ grafana_health.status | default('FAILED') }}"
+
+    - name: "🔌 Network - Test direct service ports (Docker Compose mode)"
+      block:
+        - name: Test Ollama direct connection
+          uri:
+            url: "{{ ollama_direct_url }}/api/tags"
+            method: GET
+            timeout: 30
+          register: ollama_direct
+          ignore_errors: yes
+
+        - name: Test ONNX Runtime direct connection
+          uri:
+            url: "{{ onnx_direct_url }}/v1/models"
+            method: GET
+            timeout: 30
+          register: onnx_direct
+          ignore_errors: yes
+
+        - name: Display direct connection results
+          debug:
+            msg:
+              - "Ollama direct (port 11435): {{ 'OK' if ollama_direct.status == 200 else 'FAILED' }}"
+              - "ONNX direct (port 8001): {{ 'OK' if onnx_direct.status == 200 else 'FAILED' }}"
+
+    # ============================================================================
+    # AI FUNCTIONALITY TESTS
+    # ============================================================================
+
+    - name: "🤖 AI Services - Test ONNX Runtime models"
+      block:
+        - name: Get available ONNX models via gateway
+          uri:
+            url: "{{ ai_gateway_url }}/v1/models"
+            method: GET
+            timeout: 30
+          register: onnx_models
+          ignore_errors: yes
+
+        - name: Get available ONNX models direct
+          uri:
+            url: "{{ onnx_direct_url }}/v1/models"
+            method: GET
+            timeout: 30
+          register: onnx_models_direct
+          ignore_errors: yes
+          when: onnx_models.status != 200
+
+        - name: Display ONNX models
+          debug:
+            msg: "ONNX Models: {{ (onnx_models.json | default(onnx_models_direct.json | default({}))) }}"
+
+    - name: "🧠 AI Services - Test Ollama LLM functionality"
+      block:
+        - name: Get available Ollama models via gateway
+          uri:
+            url: "{{ ai_gateway_url }}/api/tags"
+            method: GET
+            timeout: 30
+          register: ollama_models
+          ignore_errors: yes
+
+        - name: Get available Ollama models direct
+          uri:
+            url: "{{ ollama_direct_url }}/api/tags"
+            method: GET
+            timeout: 30
+          register: ollama_models_direct
+          ignore_errors: yes
+          when: ollama_models.status != 200
+
+        - name: Set working Ollama URL
+          set_fact:
+            working_ollama_url: "{{ ai_gateway_url if ollama_models.status == 200 else ollama_direct_url }}"
+            ollama_response: "{{ ollama_models if ollama_models.status == 200 else ollama_models_direct }}"
+
+        - name: Display available models
+          debug:
+            msg: "Available Ollama models: {{ ollama_response.json.models | default([]) | map(attribute='name') | list }}"
+          when: ollama_response.status == 200
+
+        - name: Test LLM generation with basic model
+          uri:
+            url: "{{ working_ollama_url }}/api/generate"
+            method: POST
+            body_format: json
+            body:
+              model: "{{ test_prompts[0].model }}"
+              prompt: "{{ test_prompts[0].prompt }}"
+              stream: false
+            timeout: 60
+          register: llm_test_basic
+          ignore_errors: yes
+          when: ollama_response.status == 200
+
+        - name: Validate LLM response structure
+          assert:
+            that:
+              - llm_test_basic.json[item] is defined
+            fail_msg: "LLM response missing required key: {{ item }}"
+            success_msg: "✅ LLM response contains {{ item }}"
+          loop: "{{ test_prompts[0].expected_keys }}"
+          when: llm_test_basic.status == 200
+
+        - name: Test custom edge-ai-assistant model
+          uri:
+            url: "{{ working_ollama_url }}/api/generate"
+            method: POST
+            body_format: json
+            body:
+              model: "{{ test_prompts[1].model }}"
+              prompt: "{{ test_prompts[1].prompt }}"
+              stream: false
+            timeout: 60
+          register: llm_test_custom
+          ignore_errors: yes
+          when: ollama_response.status == 200
+
+        - name: Display LLM test results
+          debug:
+            msg:
+              - "Basic model test: {{ 'PASSED' if llm_test_basic.status == 200 else 'FAILED' }}"
+              - "Custom model test: {{ 'PASSED' if llm_test_custom.status == 200 else 'FAILED' }}"
+              - "Basic response preview: {{ (llm_test_basic.json.response | default('No response'))[:100] }}..."
+          when: ollama_response.status == 200
+
+    # ============================================================================
+    # MONITORING AND OBSERVABILITY TESTS
+    # ============================================================================
+
+    - name: "📈 Monitoring - Test Prometheus metrics"
+      block:
+        - name: Test Prometheus targets
+          uri:
+            url: "{{ prometheus_url }}/api/v1/targets"
+            method: GET
+            timeout: 30
+          register: prometheus_targets
+          ignore_errors: yes
+
+        - name: Test Prometheus query (up metric)
+          uri:
+            url: "{{ prometheus_url }}/api/v1/query"
+            method: GET
+            body_format: form-urlencoded
+            body:
+              query: "up"
+            timeout: 30
+          register: prometheus_up_query
+          ignore_errors: yes
+
+        - name: Display Prometheus metrics
+          debug:
+            msg:
+              - "Targets status: {{ 'OK' if prometheus_targets.status == 200 else 'FAILED' }}"
+              - "Query engine: {{ 'OK' if prometheus_up_query.status == 200 else 'FAILED' }}"
+              - "Active targets: {{ (prometheus_targets.json.data.activeTargets | default([]) | length) if prometheus_targets.status == 200 else 'Unknown' }}"
+
+    - name: "📊 Monitoring - Test Grafana dashboards"
+      block:
+        - name: Test Grafana dashboard search
+          uri:
+            url: "{{ grafana_url }}/api/search"
+            method: GET
+            timeout: 30
+            user: admin
+            password: admin
+            force_basic_auth: yes
+          register: grafana_dashboards
+          ignore_errors: yes
+
+        - name: Test Grafana datasources
+          uri:
+            url: "{{ grafana_url }}/api/datasources"
+            method: GET
+            timeout: 30
+            user: admin
+            password: admin
+            force_basic_auth: yes
+          register: grafana_datasources
+          ignore_errors: yes
+
+        - name: Display Grafana status
+          debug:
+            msg:
+              - "Dashboards API: {{ 'OK' if grafana_dashboards.status == 200 else 'FAILED' }}"
+              - "Datasources API: {{ 'OK' if grafana_datasources.status == 200 else 'FAILED' }}"
+              - "Available dashboards: {{ (grafana_dashboards.json | default([]) | length) if grafana_dashboards.status == 200 else 'Unknown' }}"
+              - "Configured datasources: {{ (grafana_datasources.json | default([]) | length) if grafana_datasources.status == 200 else 'Unknown' }}"
+
+    # ============================================================================
+    # RESOURCE UTILIZATION TESTS
+    # ============================================================================
+
+    - name: "💾 Resources - Test system resource usage"
+      block:
+        - name: Get Docker system resource usage
+          command: docker system df
+          register: docker_df
+
+        - name: Get container resource stats
+          command: docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+          register: docker_stats
+
+        - name: Display resource usage
+          debug:
+            msg:
+              - "=== Docker System Usage ==="
+              - "{{ docker_df.stdout_lines }}"
+              - ""
+              - "=== Container Stats ==="
+              - "{{ docker_stats.stdout_lines }}"
+
+    - name: "☸️ Resources - Test Kubernetes resource usage"
+      block:
+        - name: Get node resource usage
+          command: kubectl top nodes --kubeconfig="{{ kubeconfig_path }}"
+          register: k8s_node_usage
+          ignore_errors: yes
+
+        - name: Get pod resource usage
+          command: kubectl top pods -A --kubeconfig="{{ kubeconfig_path }}"
+          register: k8s_pod_usage
+          ignore_errors: yes
+
+        - name: Display Kubernetes resource usage
+          debug:
+            msg:
+              - "=== Node Usage ==="
+              - "{{ k8s_node_usage.stdout_lines | default(['Metrics not available']) }}"
+              - ""
+              - "=== Pod Usage ==="
+              - "{{ k8s_pod_usage.stdout_lines | default(['Metrics not available']) }}"
+
+      when: kubeconfig_stat.stat.exists
+
+    # ============================================================================
+    # SECURITY AND COMPLIANCE TESTS
+    # ============================================================================
+
+    - name: "🛡️ Security - Test security configurations"
+      block:
+        - name: Check for running containers with security context
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Pod
+            namespace: ai-inference
+            kubeconfig: "{{ kubeconfig_path }}"
+          register: ai_pods
+          when: kubeconfig_stat.stat.exists
+
+        - name: Validate pod security contexts
+          debug:
+            msg: "Pod {{ item.metadata.name }}: Security context configured"
+          loop: "{{ ai_pods.resources | default([]) }}"
+          when:
+            - ai_pods is defined
+            - item.spec.securityContext is defined
+
+        - name: Check for resource limits
+          debug:
+            msg: "Pod {{ item.metadata.name }}: Resource limits configured"
+          loop: "{{ ai_pods.resources | default([]) }}"
+          when:
+            - ai_pods is defined
+            - item.spec.containers[0].resources.limits is defined
+
+    # ============================================================================
+    # FINAL REPORT GENERATION
+    # ============================================================================
+
+    - name: "📋 Report - Generate test summary"
+      block:
+        - name: Create test results summary
+          set_fact:
+            test_summary:
+              infrastructure:
+                docker: "{{ 'PASS' if docker_check.rc == 0 else 'FAIL' }}"
+                kubernetes: "{{ 'PASS' if cluster_nodes is defined and cluster_nodes.resources | length > 0 else 'N/A' }}"
+              networking:
+                ai_gateway: "{{ 'PASS' if gateway_health.status == 200 else 'FAIL' }}"
+                prometheus: "{{ 'PASS' if prometheus_health.status == 200 else 'FAIL' }}"
+                grafana: "{{ 'PASS' if grafana_health.status == 200 else 'FAIL' }}"
+              ai_services:
+                ollama: "{{ 'PASS' if ollama_response.status == 200 else 'FAIL' }}"
+                onnx: "{{ 'PASS' if onnx_models.status == 200 or onnx_models_direct.status == 200 else 'FAIL' }}"
+                llm_generation: "{{ 'PASS' if llm_test_basic.status == 200 else 'FAIL' }}"
+              monitoring:
+                prometheus_metrics: "{{ 'PASS' if prometheus_targets.status == 200 else 'FAIL' }}"
+                grafana_dashboards: "{{ 'PASS' if grafana_dashboards.status == 200 else 'FAIL' }}"
+
+        - name: Display final test report
+          debug:
+            msg:
+              - ""
+              - "🎯 ===== EDGE AI DEVOPS PORTFOLIO TEST REPORT ====="
+              - ""
+              - "Infrastructure Tests:"
+              - "  • Docker Engine: {{ test_summary.infrastructure.docker }}"
+              - "  • Kubernetes Cluster: {{ test_summary.infrastructure.kubernetes }}"
+              - ""
+              - "Network Connectivity:"
+              - "  • AI Gateway (port 30080): {{ test_summary.networking.ai_gateway }}"
+              - "  • Prometheus (port 30090): {{ test_summary.networking.prometheus }}"
+              - "  • Grafana (port 30030): {{ test_summary.networking.grafana }}"
+              - ""
+              - "AI Services:"
+              - "  • Ollama LLM: {{ test_summary.ai_services.ollama }}"
+              - "  • ONNX Runtime: {{ test_summary.ai_services.onnx }}"
+              - "  • LLM Generation: {{ test_summary.ai_services.llm_generation }}"
+              - ""
+              - "Monitoring & Observability:"
+              - "  • Prometheus Metrics: {{ test_summary.monitoring.prometheus_metrics }}"
+              - "  • Grafana Dashboards: {{ test_summary.monitoring.grafana_dashboards }}"
+              - ""
+              - "📊 Overall Status: {{ 'HEALTHY' if test_summary.networking.ai_gateway == 'PASS' and test_summary.ai_services.ollama == 'PASS' else 'NEEDS ATTENTION' }}"
+              - ""
+              - "Access URLs:"
+              - "  • AI Gateway: {{ ai_gateway_url }}"
+              - "  • Grafana: {{ grafana_url }} (admin/admin)"
+              - "  • Prometheus: {{ prometheus_url }}"
+              - ""
+              - "🎉 Edge AI DevOps Portfolio Testing Complete!"
+              - ""
+
+        - name: Save test report to file
+          copy:
+            content: |
+              Edge AI DevOps Portfolio - Test Report
+              Generated: {{ ansible_date_time.iso8601 }}
+              Host: {{ ansible_hostname }}
+              
+              Test Results Summary:
+              {{ test_summary | to_nice_yaml }}
+              
+              Detailed Results Available in Ansible Output
+            dest: "{{ playbook_dir }}/../test-report.txt"
+
+        - name: Display test completion
+          debug:
+            msg: "✅ Test report saved to: {{ playbook_dir }}/../test-report.txt"

@@ -1,10 +1,9 @@
 #!/bin/bash
 
 #=============================================================================
-# Edge AI DevOps Portfolio - Deployment Script
+# Edge AI DevOps Portfolio - Fixed Deployment Script
 #
-# Minimalna implementacja deployment'u dla portfolio Tom Sapletta
-# Demonstruje IaC, Kubernetes, AI/LLM integration i monitoring
+# Poprawiona wersja z troubleshootingiem dla K3s cluster issues
 #=============================================================================
 
 set -euo pipefail
@@ -21,7 +20,7 @@ readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly PURPLE='\033[0;35m'
-readonly NC='\033[0m' # No Color
+readonly NC='\033[0m'
 
 # Logging functions
 log_info() {
@@ -47,32 +46,56 @@ log_step() {
 # Error handling
 error_exit() {
     log_error "$1"
-    log_error "Deployment failed. Check $LOG_FILE for details."
+    show_troubleshooting
     exit 1
 }
 
-# Cleanup on exit
-cleanup_on_exit() {
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        log_error "Script failed with exit code $exit_code"
-        log_info "Run './scripts/deploy.sh cleanup' to clean up resources"
-    fi
+# Troubleshooting helper
+show_troubleshooting() {
+    cat << 'EOF'
+
+🔧 TROUBLESHOOTING GUIDE:
+
+1. Check Docker is running:
+   docker ps
+
+2. Check available resources:
+   docker system df
+   free -h
+
+3. Clean up Docker system:
+   docker system prune -f
+   docker volume prune -f
+
+4. Check container logs:
+   docker logs k3s-server
+
+5. Manual K3s debugging:
+   docker exec -it k3s-server k3s kubectl get nodes
+   docker exec -it k3s-server k3s check-config
+
+6. Alternative deployment:
+   ./scripts/deploy-fixed.sh kind     # Use KIND instead of K3s
+   ./scripts/deploy-fixed.sh local    # Local docker-compose version
+
+EOF
 }
-trap cleanup_on_exit EXIT
 
-# Dependency checks
+# Dependency checks with detailed diagnostics
 check_dependencies() {
-    log_step "Checking system dependencies..."
+    log_step "Checking system dependencies and resources..."
 
+    # Check required tools
     local missing_deps=()
-
-    # Required tools
     local required_tools=("docker" "terraform" "kubectl" "curl" "jq")
 
     for tool in "${required_tools[@]}"; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             missing_deps+=("$tool")
+        else
+            local version
+            version=$(command -v "$tool" && $tool --version 2>/dev/null | head -1 || echo "unknown")
+            log_debug "$tool: $version"
         fi
     done
 
@@ -80,146 +103,373 @@ check_dependencies() {
         error_exit "Missing required dependencies: ${missing_deps[*]}"
     fi
 
-    # Check Docker is running
+    # Check Docker status
     if ! docker info >/dev/null 2>&1; then
         error_exit "Docker is not running. Please start Docker and try again."
     fi
 
+    # Detailed Docker diagnostics
+    log_info "Docker system info:"
+    docker system df
+
     # Check available resources
-    local available_memory
+    local available_memory total_memory
     available_memory=$(docker system info --format '{{.MemTotal}}' 2>/dev/null || echo "0")
-    if [[ $available_memory -lt 4294967296 ]]; then  # 4GB in bytes
+    total_memory=$((available_memory / 1024 / 1024 / 1024))
+
+    log_info "Available memory: ${total_memory}GB"
+
+    if [[ $total_memory -lt 4 ]]; then
         log_warn "Available memory is less than 4GB. Performance may be degraded."
+        log_warn "Consider closing other applications or using 'kind' deployment mode."
     fi
 
-    log_info "✅ All dependencies satisfied"
+    # Check for port conflicts
+    local ports=(6443 8080 8443 30080 30090 30030)
+    for port in "${ports[@]}"; do
+        if netstat -tuln 2>/dev/null | grep -q ":$port "; then
+            log_warn "Port $port is already in use. This may cause conflicts."
+        fi
+    done
+
+    log_info "✅ Dependencies check complete"
 }
 
-# Infrastructure deployment with Terraform
-deploy_infrastructure() {
-    log_step "Deploying infrastructure with Terraform..."
+# Improved K3s deployment with better error handling
+deploy_k3s_infrastructure() {
+    log_step "Deploying K3s infrastructure with enhanced diagnostics..."
 
     cd "$PROJECT_ROOT/terraform" || error_exit "Terraform directory not found"
 
-    # Initialize Terraform
+    # Clean up any existing resources first
+    log_info "Cleaning up any existing K3s containers..."
+    docker rm -f k3s-server 2>/dev/null || true
+    docker network rm edge-ai-net 2>/dev/null || true
+
+    # Initialize and apply Terraform
     log_info "Initializing Terraform..."
     terraform init -upgrade || error_exit "Terraform initialization failed"
 
-    # Validate configuration
     log_info "Validating Terraform configuration..."
     terraform validate || error_exit "Terraform validation failed"
 
-    # Plan deployment
     log_info "Planning Terraform deployment..."
-    terraform plan -out=tfplan -detailed-exitcode || {
-        local exit_code=$?
-        if [[ $exit_code -eq 2 ]]; then
-            log_info "Changes detected, proceeding with apply..."
-        else
-            error_exit "Terraform planning failed"
-        fi
-    }
+    terraform plan -out=tfplan || error_exit "Terraform planning failed"
 
-    # Apply infrastructure
     log_info "Applying Terraform configuration..."
     terraform apply tfplan || error_exit "Terraform apply failed"
 
     cd "$PROJECT_ROOT" || exit 1
 
-    # Wait for K3s to be ready
+    # Enhanced K3s readiness check
     log_info "Waiting for K3s cluster to be ready..."
-    local timeout=120
+    wait_for_k3s_cluster
+
+    log_info "✅ K3s infrastructure deployed successfully"
+}
+
+# Robust K3s cluster readiness check
+wait_for_k3s_cluster() {
+    local timeout=180  # Increased timeout
     local count=0
+    local container_ready=false
+    local kubeconfig_ready=false
+    local api_ready=false
 
     while [[ $count -lt $timeout ]]; do
-        if [[ -f "$KUBECONFIG_PATH" ]]; then
-            log_info "Kubeconfig found, testing cluster connectivity..."
-            export KUBECONFIG="$KUBECONFIG_PATH"
+        # Check 1: Container is running
+        if ! $container_ready && docker ps --filter "name=k3s-server" --filter "status=running" | grep -q k3s-server; then
+            log_info "✅ K3s container is running"
+            container_ready=true
+        fi
 
-            if kubectl cluster-info --request-timeout=10s >/dev/null 2>&1; then
-                log_info "✅ K3s cluster is ready"
+        # Check 2: Kubeconfig file exists and has content
+        if ! $kubeconfig_ready && [[ -f "$KUBECONFIG_PATH" ]] && [[ -s "$KUBECONFIG_PATH" ]]; then
+            log_info "✅ Kubeconfig file is available"
+
+            # Fix kubeconfig server URL
+            sed -i 's|server: https://.*:6443|server: https://localhost:6443|g' "$KUBECONFIG_PATH" 2>/dev/null || true
+            export KUBECONFIG="$KUBECONFIG_PATH"
+            kubeconfig_ready=true
+        fi
+
+        # Check 3: API server is responding
+        if $container_ready && $kubeconfig_ready && ! $api_ready; then
+            if kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then
+                log_info "✅ Kubernetes API server is responding"
+                api_ready=true
                 break
             fi
         fi
 
-        log_debug "Waiting for cluster... ($count/$timeout)"
+        # Show progress every 10 seconds
+        if [[ $((count % 10)) -eq 0 ]]; then
+            log_debug "Waiting for cluster... ($count/$timeout)"
+            log_debug "Container: $container_ready, Kubeconfig: $kubeconfig_ready, API: $api_ready"
+
+            # Show container logs for debugging
+            if [[ $count -gt 30 ]] && $container_ready; then
+                log_debug "Recent K3s container logs:"
+                docker logs --tail 5 k3s-server 2>/dev/null || true
+            fi
+        fi
+
         sleep 2
         ((count+=2))
     done
 
     if [[ $count -ge $timeout ]]; then
-        error_exit "Timeout waiting for K3s cluster to be ready"
+        log_error "Timeout waiting for K3s cluster to be ready"
+        log_error "Final status - Container: $container_ready, Kubeconfig: $kubeconfig_ready, API: $api_ready"
+
+        # Detailed troubleshooting
+        log_error "Container status:"
+        docker ps -a --filter "name=k3s-server" || true
+
+        log_error "Container logs (last 20 lines):"
+        docker logs --tail 20 k3s-server || true
+
+        log_error "Network status:"
+        docker network ls | grep edge-ai || true
+
+        error_exit "K3s cluster failed to start properly"
     fi
 
-    # Verify cluster status
-    log_info "Cluster status:"
-    kubectl get nodes -o wide || log_warn "Failed to get node status"
+    # Final verification
+    log_info "Verifying cluster functionality..."
+    kubectl get nodes -o wide || error_exit "Failed to get cluster nodes"
+    kubectl get pods -A || log_warn "Failed to get system pods"
 
-    log_info "✅ Infrastructure deployed successfully"
+    log_info "Cluster is ready and functional"
 }
 
-# Deploy AI platform workloads
+# Alternative deployment using KIND (Kubernetes in Docker)
+deploy_kind_infrastructure() {
+    log_step "Deploying KIND (Kubernetes in Docker) infrastructure..."
+
+    # Check if KIND is available
+    if ! command -v kind >/dev/null 2>&1; then
+        log_info "Installing KIND..."
+        # Download KIND
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind || mv ./kind ~/.local/bin/kind
+    fi
+
+    # Create KIND cluster configuration
+    cat << EOF > kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraPortMappings:
+  - containerPort: 30080
+    hostPort: 30080
+    protocol: TCP
+  - containerPort: 30090
+    hostPort: 30090
+    protocol: TCP
+  - containerPort: 30030
+    hostPort: 30030
+    protocol: TCP
+EOF
+
+    # Create cluster
+    log_info "Creating KIND cluster..."
+    kind create cluster --name edge-ai --config kind-config.yaml
+
+    # Set kubeconfig
+    kind get kubeconfig --name edge-ai > "$KUBECONFIG_PATH"
+    export KUBECONFIG="$KUBECONFIG_PATH"
+
+    # Verify cluster
+    kubectl cluster-info
+    kubectl get nodes
+
+    log_info "✅ KIND infrastructure deployed successfully"
+}
+
+# Simplified local Docker Compose deployment
+deploy_local_infrastructure() {
+    log_step "Deploying local Docker Compose infrastructure..."
+
+    # Create docker-compose.yml for local development
+    cat << 'EOF' > docker-compose.yml
+version: '3.8'
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11435
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11435/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  onnx-runtime:
+    image: mcr.microsoft.com/onnxruntime/server:latest
+    ports:
+      - "8001:8001"
+    environment:
+      - ONNX_MODEL_PATH=/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  ollama_data:
+  grafana_data:
+EOF
+
+    # Create basic Prometheus config
+    mkdir -p configs
+    cat << 'EOF' > configs/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['ollama:11435']
+
+  - job_name: 'onnx-runtime'
+    static_configs:
+      - targets: ['onnx-runtime:8001']
+EOF
+
+    # Deploy services
+    log_info "Starting Docker Compose services..."
+    docker-compose up -d
+
+    # Wait for services
+    log_info "Waiting for services to be ready..."
+    sleep 30
+
+    # Create fake kubeconfig for script compatibility
+    mkdir -p kubeconfig
+    echo "# Local Docker Compose deployment - no kubeconfig needed" > "$KUBECONFIG_PATH"
+
+    log_info "✅ Local infrastructure deployed"
+    log_info "Services available at:"
+    log_info "  - Ollama: http://localhost:11435"
+    log_info "  - ONNX Runtime: http://localhost:8001"
+    log_info "  - Prometheus: http://localhost:9090"
+    log_info "  - Grafana: http://localhost:3000 (admin/admin)"
+}
+
+# Enhanced deployment with mode selection
+deploy_infrastructure() {
+    local deployment_mode="${1:-k3s}"
+
+    case "$deployment_mode" in
+        "k3s")
+            deploy_k3s_infrastructure
+            ;;
+        "kind")
+            deploy_kind_infrastructure
+            ;;
+        "local"|"compose")
+            deploy_local_infrastructure
+            return 0  # Skip Kubernetes deployment for local mode
+            ;;
+        *)
+            error_exit "Unknown deployment mode: $deployment_mode. Use: k3s, kind, or local"
+            ;;
+    esac
+}
+
+# Robust AI platform deployment with retries
 deploy_ai_platform() {
     log_step "Deploying AI inference platform..."
 
     export KUBECONFIG="$KUBECONFIG_PATH"
 
-    # Apply AI platform manifests
-    log_info "Applying AI platform manifests..."
-    kubectl apply -f "$PROJECT_ROOT/k8s/ai-platform.yaml" || error_exit "Failed to apply AI platform manifests"
+    # Apply with retries
+    local max_retries=3
+    local retry=0
 
-    # Wait for namespace to be ready
-    log_info "Waiting for ai-inference namespace..."
+    while [[ $retry -lt $max_retries ]]; do
+        if kubectl apply -f "$PROJECT_ROOT/k8s/ai-platform.yaml"; then
+            break
+        else
+            ((retry++))
+            log_warn "Retry $retry/$max_retries for AI platform deployment..."
+            sleep 10
+        fi
+    done
+
+    if [[ $retry -eq $max_retries ]]; then
+        error_exit "Failed to deploy AI platform after $max_retries retries"
+    fi
+
+    # Wait for deployments with extended timeout
+    log_info "Waiting for AI services (this may take 5-10 minutes for first-time model downloads)..."
+
+    # Wait for namespace
     kubectl wait --for=condition=Ready namespace/ai-inference --timeout=60s || log_warn "Namespace wait timeout"
 
-    # Wait for deployments to be ready
-    log_info "Waiting for AI services to be ready (this may take several minutes)..."
+    # Wait for deployments individually with different timeouts
+    log_info "Waiting for ONNX Runtime..."
+    kubectl wait --for=condition=available --timeout=300s deployment/onnx-inference -n ai-inference || log_warn "ONNX timeout"
 
-    # ONNX Runtime
-    log_info "Waiting for ONNX Runtime deployment..."
-    kubectl wait --for=condition=available --timeout=300s deployment/onnx-inference -n ai-inference || log_warn "ONNX deployment timeout"
+    log_info "Waiting for AI Gateway..."
+    kubectl wait --for=condition=available --timeout=180s deployment/ai-gateway -n ai-inference || log_warn "Gateway timeout"
 
-    # AI Gateway
-    log_info "Waiting for AI Gateway deployment..."
-    kubectl wait --for=condition=available --timeout=180s deployment/ai-gateway -n ai-inference || log_warn "AI Gateway timeout"
+    log_info "Waiting for Ollama (this takes longest due to model download)..."
+    kubectl wait --for=condition=available --timeout=900s deployment/ollama-llm -n ai-inference || log_warn "Ollama timeout - continuing anyway"
 
-    # Check Ollama separately (it takes longer)
-    log_info "Checking Ollama LLM status..."
-    kubectl wait --for=condition=available --timeout=600s deployment/ollama-llm -n ai-inference || log_warn "Ollama deployment timeout (continuing anyway)"
-
-    # Verify pod status
-    log_info "AI Platform pod status:"
+    # Show status regardless of timeouts
+    log_info "AI Platform status:"
     kubectl get pods -n ai-inference -o wide
-
-    # Check service endpoints
-    log_info "AI Platform services:"
     kubectl get svc -n ai-inference
 
-    log_info "✅ AI platform deployed"
+    log_info "✅ AI platform deployment complete (some services may still be initializing)"
 }
 
-# Deploy monitoring stack
+# Enhanced monitoring deployment
 deploy_monitoring() {
     log_step "Deploying monitoring stack..."
 
     export KUBECONFIG="$KUBECONFIG_PATH"
 
-    # Apply monitoring manifests
-    log_info "Applying monitoring manifests..."
     kubectl apply -f "$PROJECT_ROOT/k8s/monitoring.yaml" || error_exit "Failed to apply monitoring manifests"
 
-    # Wait for monitoring services
     log_info "Waiting for monitoring services..."
+    kubectl wait --for=condition=available --timeout=300s deployment/prometheus -n monitoring || log_warn "Prometheus timeout"
+    kubectl wait --for=condition=available --timeout=300s deployment/grafana -n monitoring || log_warn "Grafana timeout"
 
-    # Prometheus
-    log_info "Waiting for Prometheus deployment..."
-    kubectl wait --for=condition=available --timeout=300s deployment/prometheus -n monitoring || log_warn "Prometheus deployment timeout"
-
-    # Grafana
-    log_info "Waiting for Grafana deployment..."
-    kubectl wait --for=condition=available --timeout=300s deployment/grafana -n monitoring || log_warn "Grafana deployment timeout"
-
-    # Verify monitoring status
     log_info "Monitoring stack status:"
     kubectl get pods -n monitoring -o wide
     kubectl get svc -n monitoring
@@ -227,400 +477,125 @@ deploy_monitoring() {
     log_info "✅ Monitoring stack deployed"
 }
 
-# Setup custom Ollama model
-setup_ollama_model() {
-    log_step "Setting up custom Ollama model..."
-
-    export KUBECONFIG="$KUBECONFIG_PATH"
-
-    # Wait for Ollama to be fully ready
-    log_info "Ensuring Ollama is ready..."
-    kubectl wait --for=condition=available --timeout=600s deployment/ollama-llm -n ai-inference || {
-        log_warn "Ollama may not be fully ready, attempting model setup anyway..."
-    }
-
-    # Check if Ollama pod is running
-    local ollama_pod
-    ollama_pod=$(kubectl get pods -n ai-inference -l app=ollama-llm -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-
-    if [[ -z "$ollama_pod" ]]; then
-        log_warn "Ollama pod not found, skipping custom model setup"
-        return 0
-    fi
-
-    log_info "Found Ollama pod: $ollama_pod"
-
-    # Copy Modelfile to pod
-    log_info "Copying custom Modelfile to Ollama pod..."
-    kubectl cp "$PROJECT_ROOT/configs/Modelfile" "ai-inference/$ollama_pod:/tmp/Modelfile" || log_warn "Failed to copy Modelfile"
-
-    # Create custom model
-    log_info "Creating edge-ai-assistant model..."
-    kubectl exec -n ai-inference "$ollama_pod" -- sh -c "
-        echo 'Creating custom edge-ai-assistant model...'
-        ollama create edge-ai-assistant -f /tmp/Modelfile 2>/dev/null || echo 'Model creation failed or already exists'
-        echo 'Available models:'
-        ollama list
-    " || log_warn "Custom model setup may need manual intervention"
-
-    log_info "✅ Ollama model setup complete"
-}
-
-# Run comprehensive health checks
-health_check() {
-    log_step "Running health checks..."
-
-    export KUBECONFIG="$KUBECONFIG_PATH"
-
-    local health_status=0
-
-    # Check cluster health
-    log_info "Checking cluster health..."
-    if ! kubectl cluster-info --request-timeout=10s >/dev/null 2>&1; then
-        log_error "Cluster is not responding"
-        ((health_status++))
-    else
-        log_info "✅ Cluster is healthy"
-    fi
-
-    # Check AI services
-    log_info "Checking AI services..."
-    local ai_services=("onnx-inference" "ollama-llm" "ai-gateway")
-
-    for service in "${ai_services[@]}"; do
-        local ready_replicas
-        ready_replicas=$(kubectl get deployment "$service" -n ai-inference -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-        local desired_replicas
-        desired_replicas=$(kubectl get deployment "$service" -n ai-inference -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
-
-        if [[ "$ready_replicas" -eq "$desired_replicas" ]]; then
-            log_info "✅ $service: $ready_replicas/$desired_replicas ready"
-        else
-            log_warn "❌ $service: $ready_replicas/$desired_replicas ready"
-            ((health_status++))
-        fi
-    done
-
-    # Check monitoring services
-    log_info "Checking monitoring services..."
-    local monitoring_services=("prometheus" "grafana")
-
-    for service in "${monitoring_services[@]}"; do
-        local ready_replicas
-        ready_replicas=$(kubectl get deployment "$service" -n monitoring -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-
-        if [[ "$ready_replicas" -gt 0 ]]; then
-            log_info "✅ $service: ready"
-        else
-            log_warn "❌ $service: not ready"
-            ((health_status++))
-        fi
-    done
-
-    # Test external endpoints
-    log_info "Testing external endpoints..."
-
-    # AI Gateway
-    if curl -f -s http://localhost:30080/health >/dev/null 2>&1; then
-        log_info "✅ AI Gateway: responding"
-    else
-        log_warn "❌ AI Gateway: not responding"
-        ((health_status++))
-    fi
-
-    # Prometheus
-    if curl -f -s http://localhost:30090/-/healthy >/dev/null 2>&1; then
-        log_info "✅ Prometheus: responding"
-    else
-        log_warn "❌ Prometheus: not responding"
-        ((health_status++))
-    fi
-
-    # Grafana
-    if curl -f -s http://localhost:30030/api/health >/dev/null 2>&1; then
-        log_info "✅ Grafana: responding"
-    else
-        log_warn "❌ Grafana: not responding"
-        ((health_status++))
-    fi
-
-    # Resource usage summary
-    log_info "Resource usage summary:"
-    kubectl top nodes 2>/dev/null || log_warn "Node metrics not available"
-    kubectl top pods -A --sort-by=memory 2>/dev/null | head -10 || log_warn "Pod metrics not available"
-
-    if [[ $health_status -eq 0 ]]; then
-        log_info "✅ All health checks passed"
-    else
-        log_warn "❌ $health_status health check(s) failed"
-    fi
-
-    return $health_status
-}
-
-# AI functionality tests
-test_ai_functionality() {
-    log_step "Testing AI functionality..."
-
-    # Test ONNX Runtime
-    log_info "Testing ONNX Runtime..."
-    if curl -f -s "http://localhost:30080/v1/models" >/dev/null 2>&1; then
-        log_info "✅ ONNX Runtime: accessible"
-    else
-        log_warn "❌ ONNX Runtime: not accessible"
-    fi
-
-    # Test Ollama LLM
-    log_info "Testing Ollama LLM..."
-    local test_response
-    test_response=$(curl -s -X POST "http://localhost:30080/api/generate" \
-        -H "Content-Type: application/json" \
-        -d '{"model": "llama3.2:1b", "prompt": "Hello", "stream": false}' \
-        --max-time 30 2>/dev/null || echo "")
-
-    if [[ -n "$test_response" ]] && echo "$test_response" | jq -e '.response' >/dev/null 2>&1; then
-        log_info "✅ Ollama LLM: responding"
-        local response_text
-        response_text=$(echo "$test_response" | jq -r '.response' | head -c 50)
-        log_debug "Sample response: $response_text..."
-    else
-        log_warn "❌ Ollama LLM: not responding properly"
-    fi
-
-    # Test custom model if available
-    log_info "Testing custom edge-ai-assistant model..."
-    local custom_response
-    custom_response=$(curl -s -X POST "http://localhost:30080/api/generate" \
-        -H "Content-Type: application/json" \
-        -d '{"model": "edge-ai-assistant", "prompt": "What is edge computing?", "stream": false}' \
-        --max-time 30 2>/dev/null || echo "")
-
-    if [[ -n "$custom_response" ]] && echo "$custom_response" | jq -e '.response' >/dev/null 2>&1; then
-        log_info "✅ Custom edge-ai-assistant model: working"
-    else
-        log_warn "❌ Custom edge-ai-assistant model: not available"
-    fi
-}
-
-# Display access information
-show_access_info() {
-    log_step "📊 Access Information"
-
-    cat << EOF
-
-🤖 AI GATEWAY:
-   URL: http://localhost:30080
-   Health: http://localhost:30080/health
-
-   API Endpoints:
-   • ONNX Models: GET http://localhost:30080/v1/models
-   • Ollama Chat: POST http://localhost:30080/api/generate
-
-   Example Usage:
-   curl http://localhost:30080/v1/models
-   curl -X POST http://localhost:30080/api/generate \\
-     -H "Content-Type: application/json" \\
-     -d '{"model":"llama3.2:1b","prompt":"Hello AI!"}'
-
-📈 MONITORING:
-   • Prometheus: http://localhost:30090
-   • Grafana: http://localhost:30030 (admin/admin)
-   • AlertManager: http://localhost:30093
-
-🔧 KUBERNETES:
-   • Kubeconfig: $KUBECONFIG_PATH
-   • Cluster: https://localhost:6443
-
-   Quick Commands:
-   export KUBECONFIG="$KUBECONFIG_PATH"
-   kubectl get pods -A
-   kubectl logs -f deployment/ollama-llm -n ai-inference
-
-📁 PROJECT STRUCTURE:
-   • Infrastructure: terraform/
-   • Workloads: k8s/
-   • Configs: configs/
-   • Logs: $LOG_FILE
-
-EOF
-
-    log_info "🎉 Edge AI DevOps Portfolio deployed successfully!"
-    log_info "Total deployment time: $(( $(date +%s) - ${DEPLOYMENT_START_TIME:-$(date +%s)} )) seconds"
-}
-
-# Cleanup function
-cleanup() {
-    log_step "🧹 Cleaning up resources..."
-
-    export KUBECONFIG="$KUBECONFIG_PATH"
-
-    # Delete Kubernetes resources
-    log_info "Removing Kubernetes resources..."
-    kubectl delete -f "$PROJECT_ROOT/k8s/monitoring.yaml" --ignore-not-found=true --timeout=60s || log_warn "Failed to delete monitoring resources"
-    kubectl delete -f "$PROJECT_ROOT/k8s/ai-platform.yaml" --ignore-not-found=true --timeout=60s || log_warn "Failed to delete AI platform resources"
-
-    # Destroy Terraform infrastructure
-    log_info "Destroying Terraform infrastructure..."
-    cd "$PROJECT_ROOT/terraform" || exit 1
-    terraform destroy -auto-approve || log_warn "Terraform destroy encountered issues"
-    cd "$PROJECT_ROOT" || exit 1
-
-    # Clean up local files
-    log_info "Cleaning up local files..."
-    rm -rf "$PROJECT_ROOT/kubeconfig" "$PROJECT_ROOT/k3s-data" "$PROJECT_ROOT/registry-data" 2>/dev/null || true
-    rm -f "$PROJECT_ROOT/terraform/tfplan" "$PROJECT_ROOT/terraform/.terraform.lock.hcl" 2>/dev/null || true
-
-    log_info "✅ Cleanup complete"
-}
-
-# Quick demo function
-run_demo() {
-    log_step "🎬 Running AI Demo..."
-
-    log_info "Testing AI Gateway endpoints..."
-
-    # Test health endpoint
-    echo "1. Health Check:"
-    curl -s http://localhost:30080/health || echo "Health check failed"
-    echo -e "\n"
-
-    # Test ONNX models
-    echo "2. ONNX Models:"
-    curl -s http://localhost:30080/v1/models | jq . 2>/dev/null || echo "ONNX not available"
-    echo -e "\n"
-
-    # Test Ollama chat
-    echo "3. Ollama Chat Test:"
-    curl -s -X POST http://localhost:30080/api/generate \
-        -H "Content-Type: application/json" \
-        -d '{"model": "llama3.2:1b", "prompt": "Explain edge computing in one sentence.", "stream": false}' \
-        --max-time 30 | jq -r '.response // "No response"' 2>/dev/null || echo "Ollama not available"
-    echo -e "\n"
-
-    # Test custom model
-    echo "4. Custom Edge AI Assistant:"
-    curl -s -X POST http://localhost:30080/api/generate \
-        -H "Content-Type: application/json" \
-        -d '{"model": "edge-ai-assistant", "prompt": "How do I monitor Kubernetes pods?", "stream": false}' \
-        --max-time 30 | jq -r '.response // "Custom model not available"' 2>/dev/null || echo "Custom model not available"
-
-    log_info "🎬 Demo complete"
-}
-
-# Main execution function
+# Main execution with mode support
 main() {
-    # Initialize logging
     mkdir -p "$(dirname "$LOG_FILE")"
     echo "=== Edge AI DevOps Portfolio Deployment - $(date) ===" > "$LOG_FILE"
 
-    export DEPLOYMENT_START_TIME=$(date +%s)
+    local deployment_mode="k3s"
+    local command="${1:-deploy}"
 
-    case "${1:-deploy}" in
+    # Parse arguments
+    if [[ $# -gt 1 ]]; then
+        deployment_mode="$2"
+    fi
+
+    case "$command" in
         "deploy")
-            log_info "🚀 Starting complete Edge AI DevOps platform deployment..."
+            log_info "🚀 Starting Edge AI platform deployment (mode: $deployment_mode)..."
             check_dependencies
-            deploy_infrastructure
-            deploy_ai_platform
-            deploy_monitoring
-            setup_ollama_model
-            sleep 10  # Allow services to stabilize
-            health_check || log_warn "Some health checks failed"
-            show_access_info
+            deploy_infrastructure "$deployment_mode"
+
+            if [[ "$deployment_mode" != "local" ]]; then
+                deploy_ai_platform
+                deploy_monitoring
+            fi
+
+            log_info "🎉 Deployment complete!"
+            log_info "Check the services and run health checks as needed."
             ;;
 
-        "infrastructure"|"infra")
-            log_info "🏗️ Deploying infrastructure only..."
+        "k3s"|"kind"|"local")
+            main deploy "$command"
+            ;;
+
+        "troubleshoot"|"debug")
+            log_info "🔧 Running troubleshooting diagnostics..."
             check_dependencies
-            deploy_infrastructure
+
+            # Docker diagnostics
+            log_info "Docker containers:"
+            docker ps -a
+
+            log_info "Docker logs for k3s-server:"
+            docker logs k3s-server 2>/dev/null || log_warn "No k3s-server container found"
+
+            # Kubernetes diagnostics if available
+            if [[ -f "$KUBECONFIG_PATH" ]]; then
+                export KUBECONFIG="$KUBECONFIG_PATH"
+                log_info "Kubernetes cluster info:"
+                kubectl cluster-info || log_warn "Cluster not accessible"
+                kubectl get nodes || log_warn "No nodes found"
+                kubectl get pods -A || log_warn "No pods found"
+            fi
             ;;
 
-        "ai"|"ai-platform")
-            log_info "🤖 Deploying AI platform only..."
-            deploy_ai_platform
-            setup_ollama_model
-            ;;
+        "cleanup")
+            log_info "🧹 Cleaning up all resources..."
 
-        "monitoring")
-            log_info "📊 Deploying monitoring stack only..."
-            deploy_monitoring
-            ;;
+            # Stop docker-compose if exists
+            [[ -f docker-compose.yml ]] && docker-compose down -v 2>/dev/null || true
 
-        "health"|"check")
-            health_check
-            ;;
+            # Cleanup KIND cluster
+            kind delete cluster --name edge-ai 2>/dev/null || true
 
-        "test")
-            test_ai_functionality
-            ;;
+            # Cleanup K3s via Terraform
+            if [[ -d "$PROJECT_ROOT/terraform" ]]; then
+                cd "$PROJECT_ROOT/terraform"
+                terraform destroy -auto-approve || log_warn "Terraform destroy issues"
+                cd "$PROJECT_ROOT"
+            fi
 
-        "demo")
-            run_demo
-            ;;
+            # Cleanup files
+            rm -rf kubeconfig k3s-data registry-data docker-compose.yml kind-config.yaml configs/prometheus.yml
+            rm -f terraform/tfplan terraform/.terraform.lock.hcl
 
-        "cleanup"|"destroy"|"clean")
-            cleanup
-            ;;
-
-        "info"|"status")
-            show_access_info
-            ;;
-
-        "logs")
-            log_info "Showing recent logs from $LOG_FILE"
-            tail -f "$LOG_FILE"
+            log_info "✅ Cleanup complete"
             ;;
 
         "help"|"--help"|"-h")
             cat << EOF
-Edge AI DevOps Portfolio - Deployment Script
+Edge AI DevOps Portfolio - Enhanced Deployment Script
 
 USAGE:
-    $0 [COMMAND]
+    $0 [COMMAND] [MODE]
 
 COMMANDS:
-    deploy       Deploy complete platform (default)
-    infra        Deploy infrastructure only (Terraform + K3s)
-    ai-platform  Deploy AI services only
-    monitoring   Deploy monitoring stack only
-    health       Run health checks
-    test         Test AI functionality
-    demo         Run interactive AI demo
-    cleanup      Remove all resources
-    info         Show access information
-    logs         Show deployment logs
-    help         Show this help message
+    deploy      Deploy complete platform (default)
+    k3s         Deploy using K3s in Docker (default mode)
+    kind        Deploy using KIND (Kubernetes in Docker)
+    local       Deploy using Docker Compose (no Kubernetes)
+    troubleshoot Run diagnostics and troubleshooting
+    cleanup     Remove all resources
+    help        Show this help
+
+DEPLOYMENT MODES:
+    k3s         K3s cluster in Docker container (default)
+    kind        KIND cluster (alternative if K3s fails)
+    local       Docker Compose only (fastest, limited features)
 
 EXAMPLES:
-    $0                    # Full deployment
-    $0 deploy             # Full deployment
-    $0 health             # Check system health
-    $0 test               # Test AI functionality
-    $0 demo               # Interactive demo
-    $0 cleanup            # Clean up everything
+    $0                     # Deploy with K3s
+    $0 deploy k3s          # Deploy with K3s (explicit)
+    $0 deploy kind         # Deploy with KIND
+    $0 deploy local        # Deploy with Docker Compose
+    $0 troubleshoot        # Run diagnostics
+    $0 cleanup             # Clean everything
 
-REQUIREMENTS:
-    - Docker Desktop running
-    - Terraform >= 1.6
-    - kubectl >= 1.28
-    - curl, jq
-    - 4GB+ RAM available
-
-DEPLOYMENT TIME: ~3-5 minutes
-ACCESS URLS:
-    - AI Gateway: http://localhost:30080
-    - Grafana: http://localhost:30030 (admin/admin)
-    - Prometheus: http://localhost:30090
+TROUBLESHOOTING:
+If K3s deployment fails, try:
+    $0 cleanup && $0 deploy kind    # Use KIND instead
+    $0 cleanup && $0 deploy local   # Use Docker Compose
 
 EOF
             ;;
 
         *)
-            log_error "Unknown command: $1"
+            log_error "Unknown command: $command"
             log_info "Run '$0 help' for usage information"
             exit 1
             ;;
     esac
 }
 
-# Execute main function with all arguments
 main "$@"

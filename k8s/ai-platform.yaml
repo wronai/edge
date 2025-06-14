@@ -127,19 +127,19 @@ spec:
         component: llm-serving
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "11434"
+        prometheus.io/port: "11435"
         prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: ollama
         image: ollama/ollama:latest
         ports:
-        - containerPort: 11434
+        - containerPort: 11435
           name: http
           protocol: TCP
         env:
         - name: OLLAMA_HOST
-          value: "0.0.0.0:11434"
+          value: "0.0.0.0:11435"
         - name: OLLAMA_ORIGINS
           value: "*"
         - name: OLLAMA_MODELS
@@ -159,7 +159,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /api/tags
-            port: 11434
+            port: 11435
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
@@ -167,7 +167,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /api/tags
-            port: 11434
+            port: 11435
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -205,7 +205,7 @@ spec:
           echo "Model initialization complete"
         env:
         - name: OLLAMA_HOST
-          value: "0.0.0.0:11434"
+          value: "0.0.0.0:11435"
         volumeMounts:
         - name: ollama-data
           mountPath: /root/.ollama
@@ -231,8 +231,8 @@ spec:
     app: ollama-llm
   ports:
   - name: http
-    port: 11434
-    targetPort: 11434
+    port: 11435
+    targetPort: 11435
     protocol: TCP
   type: ClusterIP
 ---
@@ -254,7 +254,7 @@ data:
         }
         
         upstream ollama_backend {
-            server ollama-llm-svc:11434 max_fails=3 fail_timeout=30s;
+            server ollama-llm-svc:11435 max_fails=3 fail_timeout=30s;
         }
         
         # Logging

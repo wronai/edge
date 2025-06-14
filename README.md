@@ -184,6 +184,48 @@ kubectl apply -f k8s/ai-platform.yaml
 
 ### Troubleshooting
 
+#### Common Issues and Solutions
+
+**1. Disk Space Issues**
+If the deployment fails with eviction errors or the cluster won't start:
+
+```bash
+# Check disk space
+df -h
+
+# Clean up Docker system
+docker system prune -a -f --volumes
+
+# Remove unused containers, networks, and images
+docker container prune -f
+docker image prune -a -f
+docker network prune -f
+docker volume prune -f
+
+# Clean up old logs and temporary files
+sudo journalctl --vacuum-time=3d
+sudo find /var/log -type f -name "*.gz" -delete
+sudo find /var/log -type f -name "*.1" -delete
+```
+
+**2. Debugging K3s Cluster**
+```bash
+# Check K3s server logs
+docker logs k3s-server
+
+# Check cluster status
+docker exec k3s-server kubectl get nodes
+docker exec k3s-server kubectl get pods -A
+```
+
+**3. Port Conflicts**
+If you see port binding errors, check and free up required ports (80, 443, 6443, 30030, 30090, 30080):
+```bash
+# Check port usage
+sudo lsof -i :8080  # Replace with your port number
+```
+
+**4. Debugging Pods**
 ```bash
 # Debug pod issues
 kubectl describe pod <pod-name> -n ai-inference
@@ -196,6 +238,21 @@ kubectl get events -n ai-inference --sort-by='.lastTimestamp'
 
 # Restart services
 kubectl rollout restart deployment/ollama-llm -n ai-inference
+```
+
+**5. Reset Everything**
+If you need to start fresh:
+```bash
+# Clean up all resources
+./scripts/deploy.sh cleanup
+
+# Remove all Docker resources
+docker system prune -a --volumes --force
+
+# Remove K3s data
+sudo rm -rf terraform/kubeconfig/*
+sudo rm -rf terraform/k3s-data/*
+sudo rm -rf terraform/registry-data/*
 ```
 
 ### Cleanup

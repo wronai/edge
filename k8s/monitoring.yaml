@@ -127,7 +127,7 @@ data:
       static_configs:
       - targets: 
         - 'onnx-inference-svc.ai-inference:8001'
-        - 'ollama-llm-svc.ai-inference:11434'
+        - 'ollama-llm-svc.ai-inference:11435'
         - 'ai-gateway-svc.ai-inference:80'
       metrics_path: '/metrics'
       scrape_interval: 30s

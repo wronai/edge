@@ -4,6 +4,9 @@ venv
 build
 dist
 node_modules
+.vault_pass
+
+
 __pycache__
 .env
 .env.local
@@ -17,7 +20,7 @@ tfstate
 .tfstate.backup
 *.backup
 *.info
-
+kubeconfig
 # Logs
 logs
 *.log
