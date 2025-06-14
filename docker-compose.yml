@@ -1,23 +1,43 @@
-version: '3.8'
 services:
   ollama:
     image: ollama/ollama:latest
     ports: ["11435:11434"]
     volumes: [ollama_data:/root/.ollama]
-    environment: [OLLAMA_HOST=0.0.0.0:11435]
-
-  onnx-runtime:
-    image: mcr.microsoft.com/onnxruntime/server:latest
-    ports: ["8001:8001"]
+    environment: 
+      - OLLAMA_HOST=0.0.0.0:11435
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 10 && /bin/ollama serve"]
 
   prometheus:
     image: prom/prometheus:latest
     ports: ["9090:9090"]
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    depends_on:
+      - ollama
 
   grafana:
     image: grafana/grafana:latest
     ports: ["3007:3000"]
-    environment: [GF_SECURITY_ADMIN_PASSWORD=admin]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_DEFAULT_THEME=light
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
 volumes:
   ollama_data:
+  prometheus_data:
+  grafana_data:

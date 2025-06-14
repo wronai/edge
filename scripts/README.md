@@ -97,7 +97,7 @@ Jeśli K3s nadal nie działa, użyj Docker Compose:
 
 ### 1. Stwórz docker-compose.yml
 ```yaml
-version: '3.8'
+
 services:
   ollama:
     image: ollama/ollama:latest

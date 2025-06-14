@@ -153,7 +153,7 @@ check_prerequisites() {
 
     # Check for basic connectivity
     if curl -f -s http://localhost:30080/health >/dev/null 2>&1 || \
-       curl -f -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+       curl -f -s http://localhost:11435/api/tags >/dev/null 2>&1; then
         log_info "Found responsive AI services"
         infra_ready=true
     fi
@@ -299,7 +299,7 @@ quick_connectivity_test() {
         "http://localhost:30080/health:AI Gateway"
         "http://localhost:30090/-/healthy:Prometheus"
         "http://localhost:30030/api/health:Grafana"
-        "http://localhost:11434/api/tags:Ollama Direct"
+        "http://localhost:11435/api/tags:Ollama Direct"
         "http://localhost:8001/v1/models:ONNX Direct"
     )
 
