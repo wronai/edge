@@ -338,7 +338,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "3007:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
@@ -386,7 +386,7 @@ EOF
     log_info "  - Ollama: http://localhost:11435"
     log_info "  - ONNX Runtime: http://localhost:8001"
     log_info "  - Prometheus: http://localhost:9090"
-    log_info "  - Grafana: http://localhost:3000 (admin/admin)"
+    log_info "  - Grafana: http://localhost:3007 (admin/admin)"
 }
 
 # Enhanced deployment with mode selection

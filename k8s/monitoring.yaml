@@ -569,7 +569,7 @@ spec:
       - name: grafana
         image: grafana/grafana:10.1.0
         ports:
-        - containerPort: 3000
+        - containerPort: 3007
           name: web
           protocol: TCP
         env:
@@ -607,14 +607,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /api/health
-            port: 3000
+            port: 3007
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /api/health
-            port: 3000
+            port: 3007
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
@@ -649,8 +649,8 @@ spec:
     app: grafana
   ports:
   - name: web
-    port: 3000
-    targetPort: 3000
+    port: 3007
+    targetPort: 3007
     nodePort: 30030
     protocol: TCP
   type: NodePort

@@ -121,7 +121,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "3007:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 
@@ -143,7 +143,7 @@ curl http://localhost:8001/v1/models
 
 # Monitoring
 open http://localhost:9090  # Prometheus
-open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:3007  # Grafana (admin/admin)
 ```
 
 ## 🎬 Demo dla recruiters
@@ -173,7 +173,7 @@ curl http://localhost:8001/v1/models
 ### 3. Monitoring
 ```bash
 # Pokaż Grafana dashboard
-open http://localhost:3000
+open http://localhost:3007
 
 # Pokaż Prometheus metrics
 open http://localhost:9090

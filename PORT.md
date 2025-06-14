@@ -178,7 +178,7 @@ spec:
       - name: ollama
         image: ollama/ollama:latest
         ports:
-        - containerPort: 11434
+        - containerPort: 11435
         env:
         - name: OLLAMA_HOST
           value: "0.0.0.0"
@@ -198,7 +198,7 @@ spec:
         command: ["ollama", "pull", "llama3.2:1b"]
         env:
         - name: OLLAMA_HOST
-          value: "http://localhost:11434"
+          value: "http://localhost:11435"
 ```
 
 **Custom Modelfile configuration:**
@@ -404,7 +404,7 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=argocd-server
 kubectl apply -f argocd/applications/edge-ai-platform.yaml
 
 # Monitoring verification
-kubectl port-forward svc/grafana 3000:3000
+kubectl port-forward svc/grafana 3007:3000
 ```
 
 This portfolio project successfully demonstrates Tom's expertise in DevOps, AI/LLM integration, and modern declarative practices while remaining achievable within the 1-2 hour timeframe. It showcases industry-relevant skills that employers value in 2025, emphasizing configuration management and automation over custom application development.
