@@ -1,0 +1,517 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-inference
+  labels:
+    name: ai-inference
+    monitoring: enabled
+---
+# ONNX Runtime Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onnx-inference
+  namespace: ai-inference
+  labels:
+    app: onnx-inference
+    component: model-serving
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: onnx-inference
+  template:
+    metadata:
+      labels:
+        app: onnx-inference
+        component: model-serving
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: onnx-server
+        image: mcr.microsoft.com/onnxruntime/server:latest
+        ports:
+        - containerPort: 8001
+          name: http
+          protocol: TCP
+        - containerPort: 8002
+          name: grpc
+          protocol: TCP
+        env:
+        - name: ONNX_MODEL_PATH
+          value: "/models"
+        - name: ONNX_LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+---
+# ONNX Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: onnx-inference-svc
+  namespace: ai-inference
+  labels:
+    app: onnx-inference
+    service: model-serving
+spec:
+  selector:
+    app: onnx-inference
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  - name: grpc
+    port: 8002
+    targetPort: 8002
+    protocol: TCP
+  type: ClusterIP
+---
+# Ollama LLM Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-llm
+  namespace: ai-inference
+  labels:
+    app: ollama-llm
+    component: llm-serving
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama-llm
+  template:
+    metadata:
+      labels:
+        app: ollama-llm
+        component: llm-serving
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "11434"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+          protocol: TCP
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_ORIGINS
+          value: "*"
+        - name: OLLAMA_MODELS
+          value: "/root/.ollama/models"
+        - name: OLLAMA_KEEP_ALIVE
+          value: "5m"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        securityContext:
+          runAsUser: 0  # Ollama needs root for GPU access
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: ollama-data
+        emptyDir:
+          sizeLimit: 10Gi
+      initContainers:
+      - name: model-puller
+        image: ollama/ollama:latest
+        command: ["sh", "-c"]
+        args:
+        - |
+          echo "Starting Ollama service..."
+          ollama serve &
+          OLLAMA_PID=$!
+          
+          echo "Waiting for Ollama to be ready..."
+          sleep 15
+          
+          echo "Pulling llama3.2:1b model..."
+          ollama pull llama3.2:1b || echo "Failed to pull model, continuing..."
+          
+          echo "Listing available models..."
+          ollama list || echo "Failed to list models"
+          
+          echo "Stopping Ollama service..."
+          kill $OLLAMA_PID || true
+          wait $OLLAMA_PID || true
+          
+          echo "Model initialization complete"
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+# Ollama Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-llm-svc
+  namespace: ai-inference
+  labels:
+    app: ollama-llm
+    service: llm-serving
+spec:
+  selector:
+    app: ollama-llm
+  ports:
+  - name: http
+    port: 11434
+    targetPort: 11434
+    protocol: TCP
+  type: ClusterIP
+---
+# AI Gateway ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-gateway-config
+  namespace: ai-inference
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        upstream onnx_backend {
+            server onnx-inference-svc:8001 max_fails=3 fail_timeout=30s;
+        }
+        
+        upstream ollama_backend {
+            server ollama-llm-svc:11434 max_fails=3 fail_timeout=30s;
+        }
+        
+        # Logging
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+        
+        # Rate limiting
+        limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+        
+        server {
+            listen 80;
+            server_name localhost;
+            
+            # Health check endpoint
+            location /health {
+                return 200 'AI Gateway OK\n';
+                add_header Content-Type text/plain;
+                access_log off;
+            }
+            
+            # Metrics endpoint for Prometheus
+            location /nginx-metrics {
+                stub_status on;
+                access_log off;
+                allow 10.0.0.0/8;
+                allow 172.16.0.0/12;
+                allow 192.168.0.0/16;
+                deny all;
+            }
+            
+            # ONNX Runtime endpoints
+            location /v1/ {
+                limit_req zone=api burst=20 nodelay;
+                proxy_pass http://onnx_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_timeout 60s;
+                proxy_read_timeout 60s;
+                proxy_connect_timeout 5s;
+            }
+            
+            # Ollama LLM endpoints
+            location /api/ {
+                limit_req zone=api burst=10 nodelay;
+                proxy_pass http://ollama_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_timeout 120s;
+                proxy_read_timeout 120s;
+                proxy_connect_timeout 10s;
+                
+                # Handle SSE for streaming responses
+                proxy_buffering off;
+                proxy_cache off;
+                proxy_set_header Connection '';
+                proxy_http_version 1.1;
+                chunked_transfer_encoding off;
+            }
+            
+            # Default route - API documentation
+            location / {
+                return 200 '
+Edge AI Gateway
+
+Available endpoints:
+- GET  /health           - Health check
+- GET  /v1/models        - ONNX models
+- POST /v1/models/{name} - ONNX inference
+- GET  /api/tags         - Ollama models
+- POST /api/generate     - Ollama generation
+- POST /api/chat         - Ollama chat
+
+Examples:
+curl http://localhost:30080/v1/models
+curl -X POST http://localhost:30080/api/generate -d "{\"model\":\"llama3.2:1b\",\"prompt\":\"Hello\"}"
+';
+                add_header Content-Type text/plain;
+            }
+            
+            # Error pages
+            error_page 502 503 504 /50x.html;
+            location = /50x.html {
+                return 503 'AI Gateway: Backend services unavailable\n';
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+---
+# AI Gateway Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway
+  namespace: ai-inference
+  labels:
+    app: ai-gateway
+    component: load-balancer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-gateway
+  template:
+    metadata:
+      labels:
+        app: ai-gateway
+        component: load-balancer
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 101
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: ai-gateway-config
+          defaultMode: 0644
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-logs
+        emptyDir: {}
+---
+# AI Gateway Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-svc
+  namespace: ai-inference
+  labels:
+    app: ai-gateway
+    service: load-balancer
+spec:
+  selector:
+    app: ai-gateway
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 30080
+    protocol: TCP
+  type: NodePort
+---
+# HPA dla ONNX Inference
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: onnx-inference-hpa
+  namespace: ai-inference
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: onnx-inference
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+---
+# Network Policy dla security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-inference-netpol
+  namespace: ai-inference
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: ai-inference
+    - podSelector: {}
+  egress:
+  - {}  # Allow all egress for now (model downloads, etc.)
+---
+# Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ai-inference-quota
+  namespace: ai-inference
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "5"

@@ -1,0 +1,12 @@
+edge-ai-portfolio/
+├── terraform/
+│   └── main.tf                 # Cała infrastruktura w jednym pliku
+├── k8s/
+│   ├── ai-platform.yaml       # Wszystkie workloady AI w jednym manifeście
+│   └── monitoring.yaml         # Kompletny monitoring stack
+├── configs/
+│   ├── Modelfile              # Konfiguracja LLM dla Ollama
+│   └── grafana-dashboard.json # Dashboard dla AI inference
+├── scripts/
+│   └── deploy.sh              # Jedyny skrypt - automatyzacja deploymentu
+└── README.md                  # Dokumentacja i instrukcje
