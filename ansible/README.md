@@ -40,18 +40,11 @@ ansible/
 mkdir -p ansible
 cd ansible
 
-# Copy all 5 files from artifacts:
-# - test.yml
-# - inventory.yml  
-# - ansible.cfg
-# - requirements.yml
-# - run.sh
-
-# Make script executable
-chmod +x run.sh
-
-# Create vault password file (optional)
-echo "your-vault-password" > .vault_pass
+# 3. Test fixes
+./run.sh quick-test    # Fast connectivity check (no Ansible)
+./run.sh setup        # Fix environment
+./run.sh syntax       # Verify syntax
+./run.sh quick        # Run quick tests
 ```
 
 ### 2. Install Dependencies
@@ -183,8 +176,6 @@ tail -f ../ansible-test.log
 ## 📈 Sample Test Output
 
 ```yaml
-🎯 ===== EDGE AI DEVOPS PORTFOLIO TEST REPORT =====
-
 Infrastructure Tests:
   • Docker Engine: PASS
   • Kubernetes Cluster: PASS
@@ -204,8 +195,6 @@ Monitoring & Observability:
   • Grafana Dashboards: PASS
 
 📊 Overall Status: HEALTHY
-
-🎉 Edge AI DevOps Portfolio Testing Complete!
 ```
 
 ## 🔧 Advanced Features

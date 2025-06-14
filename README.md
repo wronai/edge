@@ -372,7 +372,7 @@ kubectl exec -n ai-inference deployment/ollama-llm -- \
 - **Batching**: Group inference requests for better throughput
 - **GPU Acceleration**: CUDA/ROCm support for faster inference
 
-## 🌟 Why This Portfolio Project Stands Out
+## 🌟 Why This Project Stands Out
 
 ### For Hiring Managers
 - **Practical Skills**: Real-world DevOps patterns, not toy examples
@@ -409,7 +409,7 @@ kubectl exec -n ai-inference deployment/ollama-llm -- \
 
 ---
 
-*This portfolio project demonstrates practical DevOps skills through minimal, production-ready code that showcases Infrastructure as Code, AI integration, and modern container orchestration patterns. Perfect for demonstrating technical competency to potential employers in the DevOps and AI engineering space.*
+*This project demonstrates practical DevOps skills through minimal, production-ready code that showcases Infrastructure as Code, AI integration, and modern container orchestration patterns. Perfect for demonstrating technical competency to potential employers in the DevOps and AI engineering space.*
 
 ## 📄 License
 

@@ -1,5 +1,5 @@
 ---
-# Edge AI DevOps Portfolio - Ansible Infrastructure Tests
+# Edge AI DevOps - Ansible Infrastructure Tests
 # Comprehensive testing playbook for validating deployment
 # Author: Tom Sapletta - DevOps Engineer
 
@@ -569,7 +569,7 @@
           debug:
             msg:
               - ""
-              - "🎯 ===== EDGE AI DEVOPS PORTFOLIO TEST REPORT ====="
+              - "🎯 ===== EDGE AI DEVOPS TEST REPORT ====="
               - ""
               - "Infrastructure Tests:"
               - "  • Docker Engine: {{ test_summary.infrastructure.docker }}"
@@ -596,13 +596,13 @@
               - "  • Grafana: {{ grafana_url }} (admin/admin)"
               - "  • Prometheus: {{ prometheus_url }}"
               - ""
-              - "🎉 Edge AI DevOps Portfolio Testing Complete!"
+              - "🎉 Edge AI DevOps Testing Complete!"
               - ""
 
         - name: Save test report to file
           copy:
             content: |
-              Edge AI DevOps Portfolio - Test Report
+              Edge AI DevOps - Test Report
               Generated: {{ ansible_date_time.iso8601 }}
               Host: {{ ansible_hostname }}
               

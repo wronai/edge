@@ -1,5 +1,5 @@
 ---
-# Edge AI DevOps Portfolio - Ansible Inventory
+# Edge AI DevOps - Ansible Inventory
 # Defines target hosts and groups for infrastructure testing
 
 all:

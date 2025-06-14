@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #=============================================================================
-# Edge AI DevOps Portfolio - Fixed Deployment Script
+# Edge AI DevOps - Fixed Deployment Script
 #
 # Poprawiona wersja z troubleshootingiem dla K3s cluster issues
 #=============================================================================
@@ -480,7 +480,7 @@ deploy_monitoring() {
 # Main execution with mode support
 main() {
     mkdir -p "$(dirname "$LOG_FILE")"
-    echo "=== Edge AI DevOps Portfolio Deployment - $(date) ===" > "$LOG_FILE"
+    echo "=== Edge AI DevOps Deployment - $(date) ===" > "$LOG_FILE"
 
     local deployment_mode="k3s"
     local command="${1:-deploy}"
@@ -555,7 +555,7 @@ main() {
 
         "help"|"--help"|"-h")
             cat << EOF
-Edge AI DevOps Portfolio - Enhanced Deployment Script
+Edge AI DevOps - Enhanced Deployment Script
 
 USAGE:
     $0 [COMMAND] [MODE]
