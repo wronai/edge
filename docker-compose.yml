@@ -9,6 +9,25 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: ["sleep 10 && /bin/ollama serve"]
 
+  onnx-runtime:
+    image: mcr.microsoft.com/onnxruntime/server:latest
+    container_name: edge-ai-onnx
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  nginx-gateway:
+    image: nginx:alpine
+    container_name: edge-ai-gateway
+    ports:
+      - "30080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ollama
+      - onnx-runtime
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     ports: ["9090:9090"]
