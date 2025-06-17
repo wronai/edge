@@ -21,7 +21,7 @@ services:
     # Remove the command to use the default entrypoint
     # The default entrypoint will start the Ollama server
     healthcheck:
-      test: ["CMD", "/bin/sh", "-c", "/usr/local/bin/curl -f http://localhost:11434/api/tags || exit 1"]
+      test: ["CMD-SHELL", "/usr/local/bin/curl -f http://localhost:11434/api/tags || exit 1"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -34,7 +34,7 @@ services:
       - "8001:8001"
     environment:
       - ONNX_MODEL_PATH=/models
-    command: ["--model_path", "/models", "--http_port", "8001"]
+    command: ["--model_path", "/models/complex-cnn-model.onnx", "--http_port", "8001"]
     volumes:
       - ./models:/models
     restart: unless-stopped

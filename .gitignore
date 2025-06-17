@@ -4,6 +4,7 @@ venv
 build
 dist
 node_modules
+models
 .vault_pass
 .backup.*
 .backup.
