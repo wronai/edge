@@ -3,18 +3,28 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: edge-ai-ollama
-    network_mode: host  # Use host networking for testing
+    ports:
+      - "11435:11434"  # Map host port 11435 to container port 11434
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_HOST=0.0.0.0:11435
+      - OLLAMA_HOST=0.0.0.0:11434  # Internal container port
+      - OLLAMA_ORIGINS=*  # Allow all origins for testing
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:11435"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:11434"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Add a command to keep the container running for debugging
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "
+        ollama serve &
+        sleep 10
+        while true; do sleep 1; done
+      "
 
   onnx-runtime:
     image: mcr.microsoft.com/onnxruntime/server:latest
