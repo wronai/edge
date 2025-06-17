@@ -39,7 +39,7 @@ services:
       - ./models:/models
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/v1/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/v1/models/complex-cnn-model.onnx/readyz"]
       interval: 10s
       timeout: 5s
       retries: 10
