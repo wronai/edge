@@ -128,6 +128,17 @@ chmod +x scripts/deploy.sh
 
 **🎯 Result**: Complete edge AI platform with monitoring in ~3-5 minutes
 
+```bash
+docker compose ps
+```
+output:
+```bash
+docker compose ps
+NAME                IMAGE                    COMMAND                  SERVICE             CREATED             STATUS              PORTS
+edge-grafana-1      grafana/grafana:latest   "/run.sh"                grafana             3 days ago          Up 8 minutes        0.0.0.0:3007->3000/tcp, :::3007->3000/tcp
+edge-ollama-1       ollama/ollama:latest     "/bin/sh -c 'sleep 1…"   ollama              3 days ago          Up 8 minutes        0.0.0.0:11435->11434/tcp, :::11435->11434/tcp
+edge-prometheus-1   prom/prometheus:latest   "/bin/prometheus --c…"   prometheus          3 days ago          Up 8 minutes        0.0.0.0:9090->9090/tcp, :::9090->9090/tcp
+```
 ### Instant Access
 
 - **🤖 AI Gateway**: http://localhost:30080
@@ -219,6 +230,7 @@ curl -X POST http://localhost:30080/api/generate \
 ```
 
 ### Interactive Demo
+
 ```bash
 # Run comprehensive AI functionality test
 ./scripts/deploy.sh demo
