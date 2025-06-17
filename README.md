@@ -23,8 +23,8 @@
 
 ```bash
 # Clone and deploy
-git clone https://github.com/DevOpsTerminal/python-podman-traefik.git edge-ai
-cd edge-ai
+git clone https://github.com/wronai/edge.git
+cd edge
 
 # Make script executable and deploy everything
 chmod +x scripts/deploy.sh

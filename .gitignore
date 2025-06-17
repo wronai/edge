@@ -6,7 +6,7 @@ dist
 node_modules
 .vault_pass
 
-
+.terraform
 __pycache__
 .env
 .env.local
