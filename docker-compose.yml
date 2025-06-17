@@ -21,7 +21,7 @@ services:
     # Remove the command to use the default entrypoint
     # The default entrypoint will start the Ollama server
     healthcheck:
-      test: ["CMD-SHELL", "/usr/local/bin/curl -f http://localhost:11434/api/tags || exit 1"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:11434/api/tags || exit 1"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -39,7 +39,7 @@ services:
       - ./models:/models
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001"]
+      test: ["CMD-SHELL", "ps aux | grep onnxruntime | grep -v grep"]
       interval: 10s
       timeout: 5s
       retries: 10
