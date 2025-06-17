@@ -1,11 +1,106 @@
+```
+ _____      _      _____    ___   
+ | ____|    / \    |_   _|  / _ \  
+ |  _|     / _ \     | |   | | | | 
+ | |___   / ___ \    | |   | |_| | 
+ |_____| /_/   \_\   |_|    \___/  
+  ___    _   _   _   _   _   _   _ 
+ |_ _|  / \ | | | \ | | | | | | | |
+  | |  / _ \| | |  \| | | | | | | |
+  | | / ___ \ |_| |\  | |_| | |_| |
+ |___/_/   \_\___/|_| \_|\___/ \___/ 
+```
 # Edge AI Platform
 
-> **Production-ready AI/ML platform for edge computing with optimized model serving, monitoring, and scaling capabilities**
+A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, and more.
 
-[![Documentation](https://img.shields.io/badge/Docs-Read%20the%20Docs-blue)](./docs/overview.md)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-2CA5E0?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+## 📚 Documentation
+
+- [📖 Overview](/docs/overview.md)
+- [🚀 Quick Start](#-quick-start)
+- [📊 Architecture](#-architecture)
+- [🔧 Services](#-services)
+- [📈 Monitoring](#-monitoring)
+- [🔍 Examples](/docs/examples/)
+  - [Ollama LLM](/docs/examples/ollama-basic.md)
+  - [ONNX Runtime](/docs/examples/onnx-basic.md)
+- [🧩 API Reference](#api-reference)
+- [🧪 Testing](#-testing)
+- [🧹 Cleanup](#-cleanup)
+
+## 🚀 Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/wronai/edge.git
+cd edge
+
+# Start all services
+make up
+
+# Check service status
+make status
+```
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    A[Client] -->|HTTP/HTTPS| B[Nginx Gateway]
+    B -->|/api/ollama/*| C[Ollama Service]
+    B -->|/api/onnx/*| D[ONNX Runtime]
+    B -->|/grafana| E[Grafana]
+    B -->|/prometheus| F[Prometheus]
+    G[Prometheus] -->|Scrape Metrics| H[Services]
+    E -->|Query| G
+    C -->|Store Models| I[(Ollama Models)]
+    D -->|Load Models| J[(ONNX Models)]
+```
+
+## 🔧 Services
+
+### Core Services
+
+```
+┌─────────────────┬───────────────────────┬───────────────────────────────┐
+│ Service         │ Port     │ Description                              │
+├─────────────────┼──────────┼──────────────────────────────────────────┤
+│ Nginx Gateway   │ 30080    │ API Gateway and reverse proxy            │
+│ Ollama          │ 11435    │ LLM serving (compatible with OpenAI API) │
+│ ONNX Runtime    │ 8001     │ ML model inference                       │
+│ Prometheus      │ 9090     │ Metrics collection and alerting          │
+│ Grafana         │ 3007     │ Monitoring dashboards                    │
+└─────────────────┴──────────┴──────────────────────────────────────────┘
+```
+
+## 📈 Monitoring
+
+Access the monitoring dashboards:
+
+- **Grafana**: http://localhost:3007 (admin/admin)
+- **Prometheus**: http://localhost:9090
+- **Ollama API**: http://localhost:11435
+- **ONNX Runtime**: http://localhost:8001
+
+## 🧪 Testing
+
+Run the test suite to verify all services are functioning correctly:
+
+```bash
+make test
+```
+
+## 🧹 Cleanup
+
+To stop and remove all containers and volumes:
+
+```bash
+make clean
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 [![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)](https://onnx.ai/)
 
 ## 🚀 Features
