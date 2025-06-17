@@ -1,17 +1,102 @@
+# Kind Cluster Configuration for Edge AI Platform
+# This configuration sets up a local Kubernetes cluster with all necessary ports exposed
+
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+
+# Configure nodes
 nodes:
 - role: control-plane
+  # Expose additional ports for services
   extraPortMappings:
+  # API Gateway (Nginx)
   - containerPort: 30080
     hostPort: 30080
     protocol: TCP
-  - containerPort: 30090
-    hostPort: 30090
+    name: http
+  # Ollama API
+  - containerPort: 30081
+    hostPort: 11435
     protocol: TCP
-  - containerPort: 30030
-    hostPort: 30030
+    name: ollama
+  # ONNX Runtime
+  - containerPort: 30082
+    hostPort: 8001
     protocol: TCP
-  - containerPort: 30093
-    hostPort: 30093
+    name: onnx
+  # Grafana
+  - containerPort: 30083
+    hostPort: 3007
     protocol: TCP
+    name: grafana
+  # Prometheus
+  - containerPort: 30084
+    hostPort: 9090
+    protocol: TCP
+    name: prometheus
+  # NodePort range
+  - containerPort: 30000
+    hostPort: 30000
+    protocol: TCP
+    name: nodeport-start
+  - containerPort: 32767
+    hostPort: 32767
+    protocol: TCP
+    name: nodeport-end
+
+# Configure kube-proxy for NodePorts
+kubeProxy:
+  mode: "ipvs"
+  ipvs:
+    strictArp: true
+
+# Configure networking
+networking:
+  # Use Calico for networking
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+  apiServerPort: 6443
+  apiServerAddress: "0.0.0.0"
+
+# Feature gates for Kubernetes
+featureGates:
+  # Enable Pod Priority and Preemption
+  PodPriority: true
+  # Enable Pod Security Policies
+  PodSecurityPolicy: true
+  # Enable TTL controller
+  TTLAfterFinished: true
+
+# Configure kubeadm
+kubeadmConfigPatches:
+- |
+  apiVersion: kubelet.config.k8s.io/v1beta1
+  kind: KubeletConfiguration
+  # Increase max pods per node
+  maxPods: 200
+  # Enable feature gates
+  featureGates:
+    # Enable KubeletPodResources
+    KubeletPodResources: true
+    # Enable DevicePlugins
+    DevicePlugins: true
+
+# Configure containerd
+containerdConfigPatches:
+- |
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "runc"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+        runtime_type = "io.containerd.runc.v2"
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+          SystemdCgroup = true
+    # Configure NVIDIA Container Runtime if GPU is available
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+      privileged_without_host_devices = false
+      runtime_engine = ""
+      runtime_root = ""
+      runtime_type = "io.containerd.runc.v1"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+        SystemdCgroup = true

@@ -30,16 +30,108 @@ A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+- Docker and Docker Compose
+- Python 3.8+ (for running tests and examples)
+- At least 8GB RAM (16GB recommended for running LLMs)
+
+### Starting the Platform
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/wronai/edge.git
+   cd edge
+   ```
+
+2. Start all services:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Verify services are running:
+   ```bash
+   docker-compose ps
+   ```
+   All services should show as "healthy" or "running".
+
+4. Run the test suite to verify everything is working:
+   ```bash
+   ./test_services.sh
+   ```
+
+### Accessing Services
+
+- **Ollama API**: http://localhost:11435
+- **ONNX Runtime**: http://localhost:8001
+- **Nginx Gateway**: http://localhost:30080
+- **Grafana**: http://localhost:3007 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+### Example: Using ONNX Runtime
+
+Here's how to use the ONNX Runtime service for model inference:
+
+1. **Check service health**:
+   ```bash
+   curl http://localhost:8001/health
+   # Expected response: {"status": "OK"}
+   ```
+
+2. **List available models**:
+   ```bash
+   curl http://localhost:8001/v1/models
+   # Example response: {"models": ["model1.onnx", "model2.onnx"]}
+   ```
+
+3. **Run inference** (using Python):
+   ```python
+   import requests
+   import numpy as np
+   
+   # Sample input data (adjust based on your model's expected input)
+   input_data = {
+       "model_name": "your_model.onnx",
+       "input": {
+           "input_1": np.random.rand(1, 224, 224, 3).tolist()  # Example for image input
+       }
+   }
+   
+   # Send inference request
+   response = requests.post(
+       "http://localhost:8001/v1/models/your_model:predict",
+       json=input_data
+   )
+   
+   # Process the response
+   if response.status_code == 200:
+       predictions = response.json()
+       print("Inference successful!")
+       print(f"Predictions: {predictions}")
+   else:
+       print(f"Error: {response.status_code}")
+       print(response.text)
+   ```
+
+4. **Using cURL for simple inference**:
+   ```bash
+   curl -X POST http://localhost:8001/v1/models/your_model:predict \
+        -H "Content-Type: application/json" \
+        -d '{"input": [[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]]}'
+   ```
+
+For more advanced usage, refer to the [API Reference](docs/api-reference.md).
+
+### Stopping the Platform
+
+To stop all services:
 ```bash
-# Clone the repository
-git clone https://github.com/wronai/edge.git
-cd edge
+docker-compose down
+```
 
-# Start all services
-make up
-
-# Check service status
-make status
+To remove all data (including models and metrics):
+```bash
+docker-compose down -v
 ```
 
 ## 🏗️ Architecture
@@ -84,11 +176,48 @@ Access the monitoring dashboards:
 
 ## 🧪 Testing
 
-Run the test suite to verify all services are functioning correctly:
+### Running Tests
 
-```bash
-make test
+We provide test scripts to verify all services are functioning correctly:
+
+1. **Basic Service Tests** - Verifies all core services are running and accessible:
+   ```bash
+   ./test_services.sh
+   ```
+
+2. **ONNX Model Test** - Validates ONNX model loading and inference (requires Python dependencies):
+   ```bash
+   python3 -m pip install -r requirements-test.txt
+   python3 test_onnx_model.py
+   ```
+
+3. **API Endpoint Tests** - Comprehensive API tests (requires Python dependencies):
+   ```bash
+   python3 test_endpoints.py
+   ```
+
+### Expected Test Results
+
+When all services are running correctly, you should see output similar to:
+
 ```
+=== Testing Direct Endpoints ===
+Testing Ollama API (http://localhost:11435/api/tags)... PASS (Status: 200)
+Testing ONNX Runtime (http://localhost:8001/v1/)... PASS (Status: 405)
+
+=== Testing Through Nginx Gateway ===
+Testing Nginx -> Ollama (http://localhost:30080/api/tags)... PASS (Status: 200)
+Testing Nginx -> ONNX Runtime (http://localhost:30080/v1/)... PASS (Status: 405)
+Testing Nginx Health Check (http://localhost:30080/health)... PASS (Status: 200)
+
+=== Testing Monitoring ===
+Testing Prometheus (http://localhost:9090)... PASS (Status: 302)
+Testing Prometheus Graph (http://localhost:9090/graph)... PASS (Status: 200)
+Testing Grafana (http://localhost:3007)... PASS (Status: 302)
+Testing Grafana Login (http://localhost:3007/login)... PASS (Status: 200)
+```
+
+> **Note**: A 405 status for ONNX Runtime is expected for GET requests to /v1/ as it requires POST requests for inference. The 302 status codes for Prometheus and Grafana are expected redirects to their respective UIs.
 
 ## 🧹 Cleanup
 
@@ -100,7 +229,7 @@ make clean
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache Software License - see the [LICENSE](LICENSE) file for details.
 [![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)](https://onnx.ai/)
 
 ## 🚀 Features
