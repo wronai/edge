@@ -35,6 +35,7 @@ A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving
 - Docker and Docker Compose
 - Python 3.8+ (for running tests and examples)
 - At least 8GB RAM (16GB recommended for running LLMs)
+- `curl` and `jq` (for testing and examples)
 
 ### Starting the Platform
 
@@ -68,6 +69,24 @@ A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving
 - **Grafana**: http://localhost:3007 (admin/admin)
 - **Prometheus**: http://localhost:9090
 
+### ONNX Runtime Management
+
+```bash
+# Check ONNX Runtime status
+make onnx-status
+
+# List available ONNX models
+make onnx-models
+
+# Load a new model
+make onnx-load MODEL=model-name PATH=/path/to/model.onnx
+
+# Test inference with a sample request
+make onnx-test
+```
+
+For detailed ONNX Runtime documentation, see [docs/onnx-runtime.md](docs/onnx-runtime.md)
+
 ### Example: Using ONNX Runtime
 
 Here's how to use the ONNX Runtime service for model inference:
@@ -91,7 +110,7 @@ Here's how to use the ONNX Runtime service for model inference:
    
    # Sample input data (adjust based on your model's expected input)
    input_data = {
-       "model_name": "your_model.onnx",
+       "model_name": "wronai.onnx",
        "input": {
            "input_1": np.random.rand(1, 224, 224, 3).tolist()  # Example for image input
        }
@@ -182,7 +201,20 @@ We provide test scripts to verify all services are functioning correctly:
 
 1. **Basic Service Tests** - Verifies all core services are running and accessible:
    ```bash
+   # Run all tests
+   make test
+   
+   # Or run individual tests
    ./test_services.sh
+   ```
+
+2. **ONNX Runtime Tests** - Test ONNX Runtime functionality:
+   ```bash
+   # Check ONNX Runtime status
+   make onnx-status
+   
+   # Test with a sample request
+   make onnx-test
    ```
 
 2. **ONNX Model Test** - Validates ONNX model loading and inference (requires Python dependencies):
@@ -221,10 +253,25 @@ Testing Grafana Login (http://localhost:3007/login)... PASS (Status: 200)
 
 ## 🧹 Cleanup
 
-To stop and remove all containers and volumes:
-
+### Stop Services
 ```bash
+# Stop all services
+make stop
+
+# Remove all containers and volumes
 make clean
+
+# Remove all unused Docker resources
+make prune
+```
+
+### ONNX Model Management
+```bash
+# List loaded models
+make onnx-models
+
+# To remove models, simply delete them from the models/ directory
+rm models/*.onnx
 ```
 
 ## 📄 License
@@ -422,15 +469,71 @@ graph TB
 ## 🤖 AI Capabilities Demo
 
 ### Test ONNX Runtime
-```bash
-# List available models
-curl http://localhost:30080/v1/models
 
-# Model inference (when models are loaded)
-curl -X POST http://localhost:30080/v1/models/example/predict \
-  -H "Content-Type: application/json" \
-  -d '{"data": [[1,2,3,4]]}'
+#### Health Check
+```bash
+# Check if the ONNX Runtime service is healthy
+curl -X GET http://localhost:8001/
+# Expected Response: "Healthy"
 ```
+
+#### Model Management
+```bash
+# List available models in the models directory
+make onnx-models
+
+# Check model status
+make onnx-model-status
+
+# Get model metadata
+make onnx-model-metadata
+```
+
+#### Model Inference
+```bash
+# Make a prediction using the default model (complex-cnn-model)
+make onnx-predict
+
+# Or use curl directly
+curl -X POST http://localhost:8001/v1/models/complex-cnn-model/versions/1:predict \
+  -H "Content-Type: application/json" \
+  -d '{"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}'
+
+# Example with Python
+python3 -c "
+import requests
+import json
+
+response = requests.post(
+    'http://localhost:8001/v1/models/complex-cnn-model/versions/1:predict',
+    json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}
+)
+print(json.dumps(response.json(), indent=2))
+"
+```
+
+#### Benchmarking
+```bash
+# Run a benchmark with 100 requests
+make onnx-benchmark
+
+# Customize model and version
+make onnx-benchmark MODEL_NAME=my-model MODEL_VERSION=2
+```
+
+#### Notes:
+- The server automatically loads models from the `/models` directory in the container
+- To use a different model:
+  1. Place your `.onnx` model file in the `./models` directory
+  2. Update the model name/version in your requests or set environment variables:
+     ```bash
+     export MODEL_NAME=your-model
+     export MODEL_VERSION=1
+     ```
+  3. Or specify them when running commands:
+     ```bash
+     make onnx-predict MODEL_NAME=your-model MODEL_VERSION=1
+     ```
 
 ### Test Ollama LLM
 ```bash
@@ -697,7 +800,7 @@ edge-ai-portfolio/
 
 ```bash
 # Add new ONNX model
-kubectl create configmap my-model --from-file=model.onnx -n ai-inference
+kubectl create configmap wronai --from-file=model.onnx -n ai-inference
 # Update deployment to mount the model
 
 # Create custom Ollama model

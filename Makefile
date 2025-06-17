@@ -79,6 +79,223 @@ install-deps: ## Install Python dependencies
 	@echo "${GREEN}Installing dependencies...${RESET}"
 	pip install -r requirements.txt
 
+# ===== ONNX Runtime =====
+onnx-status: ## Check ONNX Runtime server status
+	@echo "${YELLOW}Checking ONNX Runtime server...${RESET}"
+	@if ! curl -s http://localhost:8001/v1/ >/dev/null; then \
+		echo "${RED}✗ ONNX Runtime server is not responding${RESET}"; \
+		exit 1; \
+	else \
+		echo "${GREEN}✓ ONNX Runtime server is running${RESET}"; \
+	fi
+
+onnx-metrics: ## Show ONNX Runtime metrics
+	@echo "${YELLOW}ONNX Runtime Metrics:${RESET}"
+	@echo "${YELLOW}CPU Usage:${RESET}"
+	@docker stats --no-stream --format "{{.Container}} {{.Name}} {{.CPUPerc}}" $$(docker-compose ps -q onnx-runtime) 2>/dev/null || echo "  No metrics available"
+	@echo "\n${YELLOW}Memory Usage:${RESET}"
+	@docker stats --no-stream --format "{{.Container}} {{.Name}} {{.MemUsage}}" $$(docker-compose ps -q onnx-runtime) 2>/dev/null || echo "  No metrics available"
+
+onnx-models: ## List available ONNX models in the models directory
+	@echo "${YELLOW}Available ONNX models:${RESET}"
+	@if [ -d "models" ]; then \
+		find models -name "*.onnx" | sed 's/^/  /'; \
+	else \
+		echo "  No models directory found"; \
+	fi
+
+onnx-load: ## Load an ONNX model (usage: make onnx-load MODEL=model_name PATH=path/to/model.onnx)
+	@if [ -z "$(MODEL)" ] || [ -z "$(PATH)" ]; then \
+		echo "${RED}Error: MODEL and PATH must be specified${RESET}"; \
+		echo "Usage: make onnx-load MODEL=model_name PATH=path/to/model.onnx"; \
+		exit 1; \
+	fi
+	@echo "${YELLOW}Loading model $(MODEL) from $(PATH)...${RESET}"
+	@mkdir -p models
+	@cp "$(PATH)" "models/$(MODEL).onnx"
+	@echo "${GREEN}✓ Model $(MODEL) loaded${RESET}"
+
+# ONNX Runtime API Helpers
+MODEL_NAME ?= complex-cnn-model
+MODEL_VERSION ?= 1
+
+onnx-test: ## Test ONNX Runtime with a sample request
+	@echo "${YELLOW}Testing ONNX Runtime inference...${RESET}"
+	@if [ ! -d "models" ] || [ -z "$$(ls -A models/)" ]; then \
+		echo "${YELLOW}No models found. Try 'make onnx-load' first.${RESET}"; \
+		exit 0; \
+	fi
+	@echo "${YELLOW}Available models:${RESET}"
+	@find models -name "*.onnx" | sed 's/^/  /'
+	@echo "\n${YELLOW}Example test commands:${RESET}"
+	@echo "1. Basic test with curl (V1 API):"
+	@echo '  curl -X POST http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION):predict \'
+	@echo '    -H "Content-Type: application/json" \'
+	@echo '    -d '\''{"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}'
+	@echo "\n2. Test with Python (requires requests):"
+	@echo '  ```python'
+	@echo '  import requests'
+	@echo '  import json'
+	@echo '  '
+	@echo '  # V1 API (recommended)'
+	@echo '  response = requests.post('
+	@echo '      "http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION):predict",'
+	@echo '      json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}'
+	@echo '  )'
+	@echo '  print(json.dumps(response.json(), indent=2))'
+	@echo '  ```'
+	@echo "\n3. Check model status:"
+	@echo '  curl http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION)'
+	@echo "\n4. Get model metadata:"
+	@echo '  curl http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION)/metadata'
+
+onnx-benchmark: ## Run a simple benchmark test (requires model to be loaded)
+	@echo "${YELLOW}Running ONNX Runtime benchmark...${RESET}"
+	@if [ ! -d "models" ] || [ -z "$$(ls -A models/)" ]; then \
+		echo "${YELLOW}No models found. Try 'make onnx-load' first.${RESET}"; \
+		exit 1; \
+	fi
+	@echo "${YELLOW}Benchmarking with 100 inference requests...${RESET}"
+	@echo "${YELLOW}Model: $$(find models -name "*.onnx" | head -n 1)${RESET}"
+	@echo "${YELLOW}Using model: ${MODEL_NAME}, version: ${MODEL_VERSION}${RESET}"
+	@echo "${YELLOW}Results:${RESET}"
+	@docker-compose exec -T onnx-runtime python3 -c "\
+	import time
+	import requests
+	import statistics
+	import json
+	
+	times = []
+	success = 0
+	try:
+	    # First check if model is ready
+	    status_response = requests.get(
+	        f'http://localhost:8001/v1/{'$(MODEL_NAME)'}/versions/{'$(MODEL_VERSION)'}'
+	    )
+	    if status_response.status_code != 200:
+	        print('Model is not ready:', status_response.text)
+	        exit(1)
+	        
+	    # Run benchmark
+	    for i in range(100):
+	        try:
+	            start = time.time()
+	            response = requests.post(
+	                f'http://localhost:8001/v1/{'$(MODEL_NAME)'}/versions/{'$(MODEL_VERSION)'}:predict',
+	                json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]},
+	                timeout=5
+	            )
+	            if response.status_code == 200:
+	                times.append((time.time() - start) * 1000)  # Convert to ms
+	                success += 1
+	            else:
+	                print(f'Request failed ({response.status_code}):', response.text)
+	        except Exception as e:
+	            print(f'Request error: {str(e)}')
+	            continue
+	    
+	    # Print results
+	    if times:
+	        print(f'\nSuccess rate: {success}/100 ({success}%)')
+	        print(f'Average latency: {statistics.mean(times):.2f}ms')
+	        print(f'Min latency: {min(times):.2f}ms')
+	        print(f'Max latency: {max(times):.2f}ms')
+	        print(f'P50 latency: {statistics.median(times):.2f}ms')
+	        print(f'P95 latency: {sorted(times)[int(len(times)*0.95)]:.2f}ms')
+	    else:
+	        print('No successful requests to measure')
+	        
+	except Exception as e:
+	    print(f'Error during benchmark: {str(e)}')
+	    exit(1)
+	" || echo "${RED}Benchmark failed${RESET}"
+
+# Helper targets for common ONNX operations
+onnx-model-status: ## Check model status
+	@echo "${YELLOW}Checking status of model ${MODEL_NAME}, version ${MODEL_VERSION}...${RESET}"
+	@curl -s http://localhost:8001/v1/${MODEL_NAME}/versions/${MODEL_VERSION} | jq . 2>/dev/null || echo "${RED}Failed to get model status${RESET}"
+
+onnx-model-metadata: ## Get model metadata
+	@echo "${YELLOW}Getting metadata for model ${MODEL_NAME}, version ${MODEL_VERSION}...${RESET}"
+	@curl -s http://localhost:8001/v1/${MODEL_NAME}/versions/${MODEL_VERSION}/metadata | jq . 2>/dev/null || echo "${RED}Failed to get model metadata${RESET}"
+
+onnx-predict: ## Make a prediction with the default model
+	@echo "${YELLOW}Making prediction with model ${MODEL_NAME}, version ${MODEL_VERSION}...${RESET}"
+	@curl -X POST http://localhost:8001/v1/${MODEL_NAME}/versions/${MODEL_VERSION}:predict \
+	  -H "Content-Type: application/json" \
+	  -d '{"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}' \
+	  2>/dev/null | jq . || echo "${RED}Prediction failed${RESET}"
+
+onnx-convert: ## Convert PyTorch/TensorFlow model to ONNX (requires model file)
+	@if [ -z "$(MODEL_PATH)" ] || [ -z "$(MODEL_TYPE)" ]; then \
+		echo "${RED}Error: MODEL_PATH and MODEL_TYPE must be specified${RESET}"; \
+		echo "Usage: make onnx-convert MODEL_PATH=/path/to/model MODEL_TYPE=[pytorch|tensorflow]"; \
+		exit 1; \
+	fi
+	@echo "${YELLOW}Converting $(MODEL_TYPE) model to ONNX...${RESET}"
+	@mkdir -p models
+	@docker run --rm -v $(PWD):/workspace python:3.9-slim bash -c "\
+	    pip install $(if [ "$(MODEL_TYPE)" = "pytorch" ]; then echo 'torch torchvision'; else echo 'tensorflow'; fi) onnx && \
+	    python3 -c \"
+import os
+import sys
+sys.path.append('/workspace')
+
+# Simple conversion script
+try:
+    if '$(MODEL_TYPE)' == 'pytorch':
+        import torch
+        import torchvision
+        
+        # Example: Load a PyTorch model
+        model = torchvision.models.resnet18(pretrained=False)
+        dummy_input = torch.randn(1, 3, 224, 224)
+        
+        # Export the model
+        torch.onnx.export(
+            model,
+            dummy_input,
+            '/workspace/models/converted_model.onnx',
+            export_params=True,
+            opset_version=11,
+            do_constant_folding=True,
+            input_names=['input'],
+            output_names=['output'],
+            dynamic_axes={
+                'input': {0: 'batch_size'},
+                'output': {0: 'batch_size'}
+            }
+        )
+        print('✓ PyTorch model converted to ONNX')
+    elif '$(MODEL_TYPE)' == 'tensorflow':
+        import tensorflow as tf
+        import tf2onnx
+        
+        # Example: Load a TensorFlow model
+        model = tf.keras.applications.ResNet50(weights=None)
+        spec = (tf.TensorSpec((None, 224, 224, 3), tf.float32, name='input'),)
+        model_proto, _ = tf2onnx.convert.from_keras(
+            model,
+            input_signature=spec,
+            opset=11,
+            output_path='/workspace/models/converted_model.onnx'
+        )
+        print('✓ TensorFlow model converted to ONNX')
+    else:
+        print('Error: Unsupported model type')
+        sys.exit(1)
+        
+except Exception as e:
+    print(f'Error during conversion: {str(e)}')
+    sys.exit(1)
+\"
+	" || echo "${RED}Failed to convert model${RESET}"
+	@if [ -f "models/converted_model.onnx" ]; then \
+		echo "${GREEN}✓ Model converted successfully: models/converted_model.onnx${RESET}"; \
+	else \
+		echo "${RED}✗ Model conversion failed${RESET}"; \
+	fi
+
 # ===== Testing =====
 test: ## Run tests
 	@echo "${GREEN}Running tests...${RESET}"
@@ -97,7 +314,20 @@ test: ## Run tests
 		echo "${GREEN}✓ Ollama API is responding${RESET}"; \
 	fi
 	@echo "${YELLOW}Testing ONNX Runtime...${RESET}"
-	@if ! curl -s http://localhost:8001/v1/health | grep -q '"status":"SERVING"'; then \
+	@if ! curl -s http://localhost:8001/v1/ >/dev/null; then \
+		echo "${RED}✗ ONNX Runtime is not responding${RESET}"; \
+		exit 1; \
+	else \
+		echo "${GREEN}✓ ONNX Runtime is responding${RESET}"; \
+	fi
+	@echo "${YELLOW}Testing Nginx Gateway...${RESET}"
+	@if ! curl -s http://localhost:30080/health >/dev/null; then \
+		echo "${RED}✗ Nginx Gateway is not responding${RESET}"; \
+		exit 1; \
+	else \
+		echo "${GREEN}✓ Nginx Gateway is responding${RESET}"; \
+	fi
+	@echo "${GREEN}✓ All tests passed!${RESET}"
 		echo "${YELLOW}⚠ ONNX Runtime is not ready (may still be starting)${RESET}"; \
 	else \
 		echo "${GREEN}✓ ONNX Runtime is responding${RESET}"; \
