@@ -1,15 +1,110 @@
-# Edge AI DevOps 
+# Edge AI Platform
 
-> **Minimalistic Infrastructure as Code demonstration showcasing DevOps expertise with AI/LLM integration for edge computing environments.**
+> **Production-ready AI/ML platform for edge computing with optimized model serving, monitoring, and scaling capabilities**
 
-**Project by Tom Sapletta** - DevOps Engineer & AI Specialist  
-*Demonstrating declarative automation, container orchestration, and modern AI deployment patterns.*
+[![Documentation](https://img.shields.io/badge/Docs-Read%20the%20Docs-blue)](./docs/overview.md)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-2CA5E0?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)](https://onnx.ai/)
 
-[![Deploy Status](https://img.shields.io/badge/Deploy-Ready-brightgreen)](./scripts/deploy.sh)
-[![Infrastructure](https://img.shields.io/badge/IaC-Terraform-blue)](./terraform/)
-[![Container](https://img.shields.io/badge/Container-Kubernetes-blue)](./k8s/)
-[![AI](https://img.shields.io/badge/AI-ONNX%20%2B%20Ollama-orange)](./configs/)
-[![Monitoring](https://img.shields.io/badge/Monitoring-Prometheus%20%2B%20Grafana-red)](./k8s/monitoring.yaml)
+## 🚀 Features
+
+- **Multi-Model Serving**: Run multiple AI/ML models simultaneously
+- **Optimized Inference**: ONNX Runtime for high-performance model execution
+- **LLM Support**: Ollama integration for local LLM deployment
+- **Monitoring**: Built-in Prometheus and Grafana for observability
+- **Scalable**: Kubernetes-native design for easy scaling
+- **Developer-Friendly**: Simple CLI and comprehensive API
+
+## 📚 Documentation
+
+### Getting Started
+- [Overview](./docs/overview.md) - Platform architecture and components
+- [Quick Start](./docs/quickstart.md) - Get up and running in minutes
+- [Installation Guide](./docs/installation.md) - Detailed setup instructions
+
+### Examples
+- [Ollama Basic Usage](./docs/examples/ollama-basic.md) - Running LLM models
+- [ONNX Runtime Guide](./docs/examples/onnx-basic.md) - Deploying custom ONNX models
+- [API Reference](./docs/api/README.md) - Complete API documentation
+
+### Guides
+- [Model Optimization](./docs/guides/optimization.md) - Performance tuning
+- [Monitoring](./docs/guides/monitoring.md) - Setting up alerts and dashboards
+- [Security](./docs/guides/security.md) - Best practices for secure deployment
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker and Docker Compose
+- 8GB+ RAM (16GB recommended)
+- 20GB free disk space
+
+### Start Services
+
+```bash
+# Clone the repository
+git clone https://github.com/wronai/edge.git
+cd edge
+
+# Start all services
+make up
+
+# Check service status
+make status
+```
+
+### Access Services
+- **API Gateway**: http://localhost:30080
+- **Grafana**: http://localhost:3007 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+edge/
+├── docs/               # Documentation
+├── configs/            # Configuration files
+├── k8s/                # Kubernetes manifests
+├── scripts/            # Utility scripts
+├── terraform/          # Infrastructure as Code
+├── docker-compose.yml   # Local development
+└── Makefile            # Common tasks
+```
+
+### Common Tasks
+
+```bash
+# Start services
+make up
+
+# Stop services
+make down
+
+# View logs
+make logs
+
+# Access monitoring
+make monitor
+
+# Run tests
+make test
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📧 Contact
+
+For support or questions, please open an issue in the repository.
 
 ## 🚀 Quick Start (2 minutes to live demo)
 
@@ -130,6 +225,23 @@ curl -X POST http://localhost:30080/api/generate \
 
 # Test individual components
 ./scripts/deploy.sh test
+```
+out:
+```bash
+# Test individual components
+./scripts/deploy.sh test
+[ERROR] 19:27:54 Unknown command: demo
+[INFO] 19:27:54 Run './scripts/deploy.sh help' for usage information
+[STEP] 19:27:54 🔍 Testing deployed services...
+[INFO] 19:27:54 Testing service endpoints...
+[ERROR] 19:27:54 ❌ AI Gateway: FAILED
+[WARN] 19:27:54 ⚠️ Ollama: Not ready (may still be starting)
+[WARN] 19:27:54 ⚠️ ONNX Runtime: Not ready
+[INFO] 19:27:54 ✅ Prometheus: OK
+[INFO] 19:27:54 ✅ Grafana: OK
+[INFO] 19:27:54 Testing AI functionality...
+[WARN] 19:27:54 ⚠️ AI Generation: Model may still be downloading
+[WARN] 19:27:54 ⚠️ Some services need more time to start
 ```
 
 ## 📊 Monitoring & Observability
