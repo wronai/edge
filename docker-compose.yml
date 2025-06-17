@@ -3,18 +3,18 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: edge-ai-ollama
-    ports:
-      - "11435:11434"
+    network_mode: host  # Use host networking for testing
     volumes:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0:11435
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11435/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:11435"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   onnx-runtime:
     image: mcr.microsoft.com/onnxruntime/server:latest
@@ -23,12 +23,16 @@ services:
       - "8001:8001"
     environment:
       - ONNX_MODEL_PATH=/models
+    command: ["--model_path", "/models", "--http_port", "8001"]
+    volumes:
+      - ./models:/models
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   prometheus:
     image: prom/prometheus:latest
@@ -65,9 +69,16 @@ services:
     volumes:
       - ./configs/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - ollama
-      - onnx-runtime
+      ollama:
+        condition: service_healthy
+      onnx-runtime:
+        condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   ollama_data:

@@ -20,6 +20,20 @@ up: ## Start all services in detached mode
 down: ## Stop and remove all containers
 	docker-compose down
 
+stop: ## Stop all services without removing containers
+	docker-compose stop
+
+start: ## Start existing containers
+	docker-compose start
+
+restart: ## Restart all services
+	docker-compose restart
+
+clean: ## Remove all containers, networks, and volumes
+	docker-compose down -v
+	docker system prune -f
+	docker volume prune -f
+
 restart: ## Restart all services
 	docker-compose restart
 
