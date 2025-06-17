@@ -5,7 +5,10 @@ build
 dist
 node_modules
 .vault_pass
-
+.backup.*
+.backup.
+terraform.tfstate.backup.*
+backup
 .terraform
 __pycache__
 .env

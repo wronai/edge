@@ -238,7 +238,8 @@ curl -X POST http://localhost:30080/api/generate \
 # Test individual components
 ./scripts/deploy.sh test
 ```
-out:
+
+output:
 ```bash
 # Test individual components
 ./scripts/deploy.sh test
@@ -255,6 +256,39 @@ out:
 [WARN] 19:27:54 ⚠️ AI Generation: Model may still be downloading
 [WARN] 19:27:54 ⚠️ Some services need more time to start
 ```
+
+Run a diagnosis to check your system:
+```bash
+./scripts/deploy.sh diagnose
+```
+
+output:
+```bash
+...
+- context:
+    cluster: kind-edge-ai
+    user: kind-edge-ai
+[STEP] 19:32:14 🔍 Testing service connectivity...
+//localhost:30080/health:AI Gateway: ❌ NOT RESPONDING
+//localhost:30090/-/healthy:Prometheus: ❌ NOT RESPONDING
+//localhost:30030/api/health:Grafana: ❌ NOT RESPONDING
+//localhost:11435/api/tags:Ollama Direct: ❌ NOT RESPONDING
+//localhost:8001/v1/models:ONNX Direct: ❌ NOT RESPONDING
+
+[STEP] 19:32:14 🔍 Diagnosis complete!
+```
+
+
+Fix and deploy the services:
+```bash
+./scripts/deploy.sh fix
+```
+
+Test the services after deployment:
+```bash
+./scripts/deploy.sh test
+```
+
 
 ## 📊 Monitoring & Observability
 
