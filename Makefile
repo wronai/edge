@@ -1,11 +1,13 @@
 .PHONY: help test clean format lint
 
 # Colors
-GREEN  := $(shell tput -Txterm setaf 2)
-YELLOW := $(shell tput -Txterm setaf 3)
-RED    := $(shell tput -Txterm setaf 1)
-WHITE  := $(shell tput -Txterm setaf 7)
-RESET  := $(shell tput -Txterm sgr0)
+TERM ?= xterm-256color
+export TERM
+GREEN  := $(shell tput -Txterm-256color setaf 2 2>/dev/null || echo '')
+YELLOW := $(shell tput -Txterm-256color setaf 3 2>/dev/null || echo '')
+RED    := $(shell tput -Txterm-256color setaf 1 2>/dev/null || echo '')
+WHITE  := $(shell tput -Txterm-256color setaf 7 2>/dev/null || echo '')
+RESET  := $(shell tput -Txterm-256color sgr0 2>/dev/null || echo '')
 
 # Help Target
 help: ## Show this help
@@ -95,56 +97,27 @@ onnx-metrics: ## Show ONNX Runtime metrics
 
 # Model management
 onnx-models: ## List available ONNX models in the models directory
-	@echo "${YELLOW}Available ONNX models:${RESET}"
-	@if [ -d "models" ]; then \
-		find models -name "*.onnx" | sed 's/^/  /'; \
-	else \
-		echo "  No models directory found"; \
-	fi
+	@./scripts/model_operations.sh list
 
-onnx-load: ## Load an ONNX model (usage: make onnx-load MODEL=model_name PATH=path/to/model.onnx)
-	@if [ -z "$(MODEL)" ] || [ -z "$(PATH)" ]; then \
-		echo "${RED}Error: MODEL and PATH must be specified${RESET}"; \
-		echo "Usage: make onnx-load MODEL=model_name PATH=path/to/model.onnx"; \
+onnx-load: ## Load an ONNX model (usage: make onnx-load MODEL=model_name MODEL_SOURCE=path/to/model.onnx)
+	@if [ -z "$(MODEL)" ] || [ -z "$(MODEL_SOURCE)" ]; then \
+		echo "${RED}Error: MODEL and MODEL_SOURCE must be specified${RESET}"; \
+		echo "Usage: make onnx-load MODEL=model_name MODEL_SOURCE=path/to/model.onnx"; \
+		echo "Example: make onnx-load MODEL=simple-model MODEL_SOURCE=./models/simple-model.onnx"; \
 		exit 1; \
 	fi
-	@echo "${YELLOW}Loading model $(MODEL) from $(PATH)...${RESET}"
-	@mkdir -p models
-	@cp "$(PATH)" "models/$(MODEL).onnx"
-	@echo "${GREEN}✓ Model $(MODEL) loaded${RESET}"
+	@if [ ! -f "$(MODEL_SOURCE)" ]; then \
+		echo "${RED}Error: Source file '$(MODEL_SOURCE)' not found${RESET}"; \
+		exit 1; \
+	fi
+	@./scripts/model_operations.sh load "$(MODEL)" "$(MODEL_SOURCE)" || exit 1
+	@echo "${YELLOW}Available models:${RESET}"
+	@find models -name "*.onnx" 2>/dev/null | sed 's/^/  /' || echo "  No models found"
 
 onnx-test: ## Test ONNX Runtime with a sample request
-	@echo "${YELLOW}Testing ONNX Runtime inference...${RESET}"
-	@if [ ! -d "models" ] || [ -z "$$(ls -A models/)" ]; then \
-		echo "${YELLOW}No models found. Try 'make onnx-load' first.${RESET}"; \
-		exit 0; \
-	fi
-	@echo "${YELLOW}Available models:${RESET}"
-	@find models -name "*.onnx" | sed 's/^/  /'
-	@echo "\n${YELLOW}Example test commands:${RESET}"
-	@echo "1. Basic test with curl (V1 API):"
-	@echo '  curl -X POST http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION):predict \'
-	@echo '    -H "Content-Type: application/json" \'
-	@echo '    -d '\''{"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}'
-	@echo "\n2. Test with Python (requires requests):"
-	@echo '  ```python'
-	@echo '  import requests'
-	@echo '  import json'
-	@echo '  '
-	@echo '  # V1 API (recommended)'
-	@echo '  response = requests.post('
-	@echo '      "http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION):predict",'
-	@echo '      json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}'
-	@echo '  )'
-	@echo '  print(json.dumps(response.json(), indent=2))'
-	@echo '  ```'
-	@echo "\n3. Check model status:"
-	@echo '  curl http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION)'
-	@echo "\n4. Get model metadata:"
-	@echo '  curl http://localhost:8001/v1/$(MODEL_NAME)/versions/$(MODEL_VERSION)/metadata'
+	@./scripts/model_operations.sh test
 
 onnx-benchmark: ## Run a simple benchmark test (requires model to be loaded)
-	@echo "${YELLOW}Running ONNX Runtime benchmark...${RESET}"
 	@if [ ! -d "models" ] || [ -z "$$(ls -A models/)" ]; then \
 		echo "${YELLOW}No models found. Try 'make onnx-load' first.${RESET}"; \
 		exit 1; \
@@ -152,57 +125,7 @@ onnx-benchmark: ## Run a simple benchmark test (requires model to be loaded)
 	@echo "${YELLOW}Benchmarking with 100 inference requests...${RESET}"
 	@echo "${YELLOW}Model: $$(find models -name "*.onnx" | head -n 1)${RESET}"
 	@echo "${YELLOW}Using model: ${MODEL_NAME}, version: ${MODEL_VERSION}${RESET}"
-	@echo "${YELLOW}Results:${RESET}"
-	@docker-compose exec -T onnx-runtime python3 -c "\
-	import time
-	import requests
-	import statistics
-	import json
-	
-	times = []
-	success = 0
-	try:
-	    # First check if model is ready
-	    status_response = requests.get(
-	        f'http://localhost:8001/v1/{'$(MODEL_NAME)'}/versions/{'$(MODEL_VERSION)'}'
-	    )
-	    if status_response.status_code != 200:
-	        print('Model is not ready:', status_response.text)
-	        exit(1)
-	        
-	    # Run benchmark
-	    for i in range(100):
-	        try:
-	            start = time.time()
-	            response = requests.post(
-	                f'http://localhost:8001/v1/{'$(MODEL_NAME)'}/versions/{'$(MODEL_VERSION)'}:predict',
-	                json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]},
-	                timeout=5
-	            )
-	            if response.status_code == 200:
-	                times.append((time.time() - start) * 1000)  # Convert to ms
-	                success += 1
-	            else:
-	                print(f'Request failed ({response.status_code}):', response.text)
-	        except Exception as e:
-	            print(f'Request error: {str(e)}')
-	            continue
-	    
-	    # Print results
-	    if times:
-	        print(f'\nSuccess rate: {success}/100 ({success}%)')
-	        print(f'Average latency: {statistics.mean(times):.2f}ms')
-	        print(f'Min latency: {min(times):.2f}ms')
-	        print(f'Max latency: {max(times):.2f}ms')
-	        print(f'P50 latency: {statistics.median(times):.2f}ms')
-	        print(f'P95 latency: {sorted(times)[int(len(times)*0.95)]:.2f}ms')
-	    else:
-	        print('No successful requests to measure')
-	        
-	except Exception as e:
-	    print(f'Error during benchmark: {str(e)}')
-	    exit(1)
-	" || echo "${RED}Benchmark failed${RESET}"
+	@MODEL_NAME="${MODEL_NAME}" MODEL_VERSION="${MODEL_VERSION}" python3 scripts/run_benchmark.py || echo "${RED}Benchmark failed${RESET}"
 
 # Helper targets for common ONNX operations
 onnx-model-status: ## Check model status
@@ -239,6 +162,7 @@ test: ## Run tests
 	@echo "${YELLOW}Checking service status...${RESET}"
 	@scripts/check_status.sh
 	@echo "${YELLOW}Testing API endpoints...${RESET}"
+	
 	@echo "${YELLOW}Testing Ollama API...${RESET}"
 	@if ! curl -s http://localhost:11435/api/tags >/dev/null; then \
 		echo "${RED}✗ Ollama API is not responding${RESET}"; \
@@ -246,24 +170,19 @@ test: ## Run tests
 	else \
 		echo "${GREEN}✓ Ollama API is responding${RESET}"; \
 	fi
+	
 	@echo "${YELLOW}Testing ONNX Runtime...${RESET}"
-	@if ! curl -s http://localhost:8001/v1/ >/dev/null; then \
-		echo "${RED}✗ ONNX Runtime is not responding${RESET}"; \
-		exit 1; \
-	else \
-		echo "${GREEN}✓ ONNX Runtime is responding${RESET}"; \
-	fi
+	@docker run --rm -v $(PWD):/workspace python:3.9-slim bash -c '\
+	    cd /workspace && \
+	    pip install requests && \
+	    python3 scripts/test_onnx_service.py' || { echo "${RED}✗ ONNX Runtime tests failed${RESET}"; exit 1; }
+	
 	@echo "${YELLOW}Testing Nginx Gateway...${RESET}"
 	@if ! curl -s http://localhost:30080/health >/dev/null; then \
 		echo "${RED}✗ Nginx Gateway is not responding${RESET}"; \
 		exit 1; \
 	else \
 		echo "${GREEN}✓ Nginx Gateway is responding${RESET}"; \
-	fi
-	@echo "${GREEN}✓ All tests passed!${RESET}"
-		echo "${YELLOW}⚠ ONNX Runtime is not ready (may still be starting)${RESET}"; \
-	else \
-		echo "${GREEN}✓ ONNX Runtime is responding${RESET}"; \
 	fi
 	@echo "${GREEN}✓ All tests passed!${RESET}"
 

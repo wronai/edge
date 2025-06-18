@@ -1,15 +1,3 @@
-```
- _____      _      _____    ___   
- | ____|    / \    |_   _|  / _ \  
- |  _|     / _ \     | |   | | | | 
- | |___   / ___ \    | |   | |_| | 
- |_____| /_/   \_\   |_|    \___/  
-  ___    _   _   _   _   _   _   _ 
- |_ _|  / \ | | | \ | | | | | | | |
-  | |  / _ \| | |  \| | | | | | | |
-  | | / ___ \ |_| |\  | |_| | |_| |
- |___/_/   \_\___/|_| \_|\___/ \___/ 
-```
 # Edge AI Platform
 
 A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, and more.
@@ -79,7 +67,9 @@ make onnx-status
 make onnx-models
 
 # Load a new model
-make onnx-load MODEL=model-name PATH=/path/to/model.onnx
+make onnx-load MODEL=simple-model.onnx PATH=models/simple-model.onnx
+#make onnx-load MODEL=simple-model.onnx
+make onnx-load MODEL=simple-model MODEL_SOURCE=./models/simple-model.onnx
 
 # Test inference with a sample request
 make onnx-test
