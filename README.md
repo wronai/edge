@@ -1,6 +1,94 @@
 # Edge AI Platform
 
-A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, and more.
+A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, and model conversion tools.
+
+## 🛠️ Model Conversion & Validation Tools
+
+This project includes a powerful command-line interface (CLI) for converting and validating machine learning models, with a focus on ONNX format.
+
+### Installation
+
+```bash
+# Install the package in development mode
+pip install -e .
+
+# Install with TensorFlow support (for Keras/SavedModel conversion)
+pip install -e .[tensorflow]
+
+# Install with PyTorch support
+pip install -e .[torch]
+
+# Install with all dependencies
+pip install -e .[all]
+```
+
+### CLI Usage
+
+#### Model Validation
+
+Validate an ONNX model:
+
+```bash
+edge-ai test-model path/to/model.onnx
+```
+
+Options:
+- `--output-json`: Save validation results to a JSON file
+- `--verbose`, `-v`: Enable verbose output
+
+Example:
+```bash
+edge-ai test-model models/my_model.onnx --output-json validation_results.json --verbose
+```
+
+#### Model Conversion
+
+Convert models between different formats using the `convert` command group.
+
+**PyTorch to ONNX:**
+```bash
+edge-ai convert pytorch model.pt output.onnx --input-shape 1,3,224,224
+```
+
+**Keras to ONNX:**
+```bash
+edge-ai convert keras model.h5 output.onnx --input-shape 1,224,224,3
+```
+
+**TensorFlow SavedModel to ONNX:**
+```bash
+edge-ai convert saved-model saved_model_dir output.onnx
+```
+
+Common options for conversion:
+- `--opset`: ONNX opset version (default: 13)
+- `--verbose`, `-v`: Enable verbose output
+
+### Python API
+
+You can also use the conversion and validation tools programmatically:
+
+```python
+from edge_ai import validate_model, convert_to_onnx
+
+# Validate a model
+results = validate_model("model.onnx")
+print(f"Model validation passed: {results['validation_summary']['passed']}")
+
+# Convert a PyTorch model to ONNX
+convert_to_onnx(
+    model_path="model.pt",
+    output_path="output.onnx",
+    input_shapes=[(1, 3, 224, 224)],
+    opset_version=13
+)
+```
+
+For more examples, see the [examples](/examples) directory.
+
+## 📚 Documentation
+
+For detailed documentation about the Edge AI platform, including LLM serving and monitoring, see the sections below.
 
 ## 📚 Documentation
 
