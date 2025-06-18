@@ -5,6 +5,7 @@ build
 dist
 node_modules
 models
+.tox
 .vault_pass
 .backup.*
 .backup.
