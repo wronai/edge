@@ -44,6 +44,12 @@ load_model() {
         return 1
     }
     
+    # Check if source and destination are the same file
+    if [ "$(realpath "$model_source" 2>/dev/null || echo "$model_source")" = "$(realpath "$target_file" 2>/dev/null || echo "$target_file")" ]; then
+        echo -e "${YELLOW}✓ Model is already in the correct location: $target_file${NC}"
+        return 0
+    fi
+    
     # Copy the file
     if ! cp "$model_source" "$target_file"; then
         echo -e "${RED}✗ Failed to copy model to $target_file${NC}"
