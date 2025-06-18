@@ -237,11 +237,7 @@ onnx-convert: ## Convert a model to ONNX format
 test: ## Run tests
 	@echo "${GREEN}Running tests...${RESET}"
 	@echo "${YELLOW}Checking service status...${RESET}"
-	@if ! docker-compose ps | grep -q "Up"; then \
-		echo "${RED}Error: Services are not running. Run 'make up' first.${RESET}"; \
-		exit 1; \
-	fi
-	@echo "${GREEN}✓ Services are running${RESET}"
+	@scripts/check_status.sh
 	@echo "${YELLOW}Testing API endpoints...${RESET}"
 	@echo "${YELLOW}Testing Ollama API...${RESET}"
 	@if ! curl -s http://localhost:11435/api/tags >/dev/null; then \
