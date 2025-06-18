@@ -80,22 +80,20 @@ install-deps: ## Install Python dependencies
 	pip install -r requirements.txt
 
 # ===== ONNX Runtime =====
-onnx-status: ## Check ONNX Runtime server status
-	@echo "${YELLOW}Checking ONNX Runtime server...${RESET}"
-	@if ! curl -s http://localhost:8001/v1/ >/dev/null; then \
-		echo "${RED}✗ ONNX Runtime server is not responding${RESET}"; \
-		exit 1; \
-	else \
-		echo "${GREEN}✓ ONNX Runtime server is running${RESET}"; \
-	fi
+# ONNX Runtime API Helpers
+MODEL_NAME ?= complex-cnn-model
+MODEL_VERSION ?= 1
+
+.PHONY: onnx-status onnx-metrics onnx-models onnx-load onnx-test onnx-benchmark onnx-convert
+
+# ONNX Runtime status and metrics
+onnx-status: ## Check if ONNX Runtime service is running
+	@scripts/check_status.sh
 
 onnx-metrics: ## Show ONNX Runtime metrics
-	@echo "${YELLOW}ONNX Runtime Metrics:${RESET}"
-	@echo "${YELLOW}CPU Usage:${RESET}"
-	@docker stats --no-stream --format "{{.Container}} {{.Name}} {{.CPUPerc}}" $$(docker-compose ps -q onnx-runtime) 2>/dev/null || echo "  No metrics available"
-	@echo "\n${YELLOW}Memory Usage:${RESET}"
-	@docker stats --no-stream --format "{{.Container}} {{.Name}} {{.MemUsage}}" $$(docker-compose ps -q onnx-runtime) 2>/dev/null || echo "  No metrics available"
+	@scripts/show_metrics.sh
 
+# Model management
 onnx-models: ## List available ONNX models in the models directory
 	@echo "${YELLOW}Available ONNX models:${RESET}"
 	@if [ -d "models" ]; then \
@@ -114,10 +112,6 @@ onnx-load: ## Load an ONNX model (usage: make onnx-load MODEL=model_name PATH=pa
 	@mkdir -p models
 	@cp "$(PATH)" "models/$(MODEL).onnx"
 	@echo "${GREEN}✓ Model $(MODEL) loaded${RESET}"
-
-# ONNX Runtime API Helpers
-MODEL_NAME ?= complex-cnn-model
-MODEL_VERSION ?= 1
 
 onnx-test: ## Test ONNX Runtime with a sample request
 	@echo "${YELLOW}Testing ONNX Runtime inference...${RESET}"
@@ -226,71 +220,14 @@ onnx-predict: ## Make a prediction with the default model
 	  -d '{"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}' \
 	  2>/dev/null | jq . || echo "${RED}Prediction failed${RESET}"
 
-onnx-convert: ## Convert PyTorch/TensorFlow model to ONNX (requires model file)
-	@if [ -z "$(MODEL_PATH)" ] || [ -z "$(MODEL_TYPE)" ]; then \
-		echo "${RED}Error: MODEL_PATH and MODEL_TYPE must be specified${RESET}"; \
-		echo "Usage: make onnx-convert MODEL_PATH=/path/to/model MODEL_TYPE=[pytorch|tensorflow]"; \
-		exit 1; \
-	fi
+onnx-convert: ## Convert a model to ONNX format
 	@echo "${YELLOW}Converting $(MODEL_TYPE) model to ONNX...${RESET}"
 	@mkdir -p models
-	@docker run --rm -v $(PWD):/workspace python:3.9-slim bash -c "\
-	    pip install $(if [ "$(MODEL_TYPE)" = "pytorch" ]; then echo 'torch torchvision'; else echo 'tensorflow'; fi) onnx && \
-	    python3 -c \"
-import os
-import sys
-sys.path.append('/workspace')
-
-# Simple conversion script
-try:
-    if '$(MODEL_TYPE)' == 'pytorch':
-        import torch
-        import torchvision
-        
-        # Example: Load a PyTorch model
-        model = torchvision.models.resnet18(pretrained=False)
-        dummy_input = torch.randn(1, 3, 224, 224)
-        
-        # Export the model
-        torch.onnx.export(
-            model,
-            dummy_input,
-            '/workspace/models/converted_model.onnx',
-            export_params=True,
-            opset_version=11,
-            do_constant_folding=True,
-            input_names=['input'],
-            output_names=['output'],
-            dynamic_axes={
-                'input': {0: 'batch_size'},
-                'output': {0: 'batch_size'}
-            }
-        )
-        print('✓ PyTorch model converted to ONNX')
-    elif '$(MODEL_TYPE)' == 'tensorflow':
-        import tensorflow as tf
-        import tf2onnx
-        
-        # Example: Load a TensorFlow model
-        model = tf.keras.applications.ResNet50(weights=None)
-        spec = (tf.TensorSpec((None, 224, 224, 3), tf.float32, name='input'),)
-        model_proto, _ = tf2onnx.convert.from_keras(
-            model,
-            input_signature=spec,
-            opset=11,
-            output_path='/workspace/models/converted_model.onnx'
-        )
-        print('✓ TensorFlow model converted to ONNX')
-    else:
-        print('Error: Unsupported model type')
-        sys.exit(1)
-        
-except Exception as e:
-    print(f'Error during conversion: {str(e)}')
-    sys.exit(1)
-\"
-	" || echo "${RED}Failed to convert model${RESET}"
-	@if [ -f "models/converted_model.onnx" ]; then \
+	@docker run --rm -v $(PWD):/workspace python:3.9-slim bash -c '
+	    pip install $(if [ "$(MODEL_TYPE)" = "pytorch" ]; then echo "torch torchvision"; else echo "tensorflow"; fi) onnx && 
+	    python3 scripts/convert_model.py'
+	@cp model.onnx models/$(MODEL).onnx
+	@echo "${GREEN}✓ Model $(MODEL) converted and saved${RESET}"
 		echo "${GREEN}✓ Model converted successfully: models/converted_model.onnx${RESET}"; \
 	else \
 		echo "${RED}✗ Model conversion failed${RESET}"; \
