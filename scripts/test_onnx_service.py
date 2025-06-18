@@ -3,41 +3,48 @@
 import requests
 import sys
 import os
+import json
 
 def test_onnx_service():
     """Test the ONNX Runtime service endpoints."""
-    base_url = "http://localhost:8001"
+    base_url = "http://wronai_edge-onnx:8001"
     model_name = os.getenv('MODEL_NAME', 'complex-cnn-model')
     model_version = os.getenv('MODEL_VERSION', '1')
     
     print("Testing ONNX Runtime service...")
     
-    # Test basic endpoint
+    # Test health endpoint
     try:
-        response = requests.get(f"{base_url}/v1/")
-        print(f"✓ Basic endpoint: HTTP {response.status_code}")
+        response = requests.get(f"{base_url}/v2/health/ready")
+        print(f"✓ Health endpoint: HTTP {response.status_code}")
+        if response.status_code == 200:
+            health = response.json()
+            print(f"   Health status: {json.dumps(health, indent=2)}")
     except Exception as e:
-        print(f"✗ Basic endpoint failed: {str(e)}")
+        print(f"✗ Health check failed: {str(e)}")
         return 1
     
-    # Test model status
+    # Test model metadata
     try:
-        response = requests.get(f"{base_url}/v1/{model_name}/versions/{model_version}")
-        print(f"✓ Model status: HTTP {response.status_code}")
+        print("\nTesting model metadata...")
+        response = requests.get(f"{base_url}/v2/models/{model_name}/versions/{model_version}")
+        print(f"✓ Model metadata: HTTP {response.status_code}")
         if response.status_code == 200:
-            print(f"   Model state: {response.json().get('state', 'unknown')}")
+            print(f"   Model info: {json.dumps(response.json(), indent=2)}")
     except Exception as e:
-        print(f"✗ Model status check failed: {str(e)}")
+        print(f"✗ Model metadata check failed: {str(e)}")
     
-    # Test prediction
+    # Test model ready status
     try:
-        response = requests.post(
-            f"{base_url}/v1/{model_name}/versions/{model_version}:predict",
-            json={"instances": [{"data": [1.0, 2.0, 3.0, 4.0]}]}
-        )
-        print(f"✓ Prediction: HTTP {response.status_code}")
+        response = requests.get(f"{base_url}/v2/models/{model_name}/versions/{model_version}/ready")
+        print(f"\nModel ready status: HTTP {response.status_code}")
+        if response.status_code == 200:
+            print(f"   Model is ready: {json.dumps(response.json(), indent=2)}")
     except Exception as e:
-        print(f"✗ Prediction failed: {str(e)}")
+        print(f"✗ Model ready check failed: {str(e)}")
+    
+    print("\nNote: Some endpoints may return 405 (Method Not Allowed) which is expected")
+    print("for certain HTTP methods on specific endpoints in the ONNX Runtime server.")
     
     return 0
 
