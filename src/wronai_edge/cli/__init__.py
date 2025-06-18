@@ -1,8 +1,8 @@
 """Edge AI command line interface."""
 
 import click
-from .main import cli
-from .benchmark import benchmark
+from wronai_edge.cli.main import cli
+from wronai_edge.cli.benchmark import benchmark
 
 # Register commands
 cli.add_command(benchmark)

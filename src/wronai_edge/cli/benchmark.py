@@ -3,7 +3,9 @@
 import click
 from pathlib import Path
 from typing import List, Optional
-from ...benchmark import benchmark_model, compare_models, print_benchmark_results
+
+# Use absolute imports
+from wronai_edge.benchmark import benchmark_model, compare_models, print_benchmark_results
 
 @click.command()
 @click.argument('model_paths', nargs=-1, type=click.Path(exists=True))

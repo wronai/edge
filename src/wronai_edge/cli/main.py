@@ -1,8 +1,18 @@
 """Edge AI Model Management CLI."""
 
 import click
+import sys
+import os
 from pathlib import Path
 from typing import Optional, List, Tuple
+
+# Add the package root to the Python path
+package_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, package_root)
+
+# Now import the package modules
+from wronai_edge.converters import convert_model
+from wronai_edge.benchmark import benchmark_model, compare_models, print_benchmark_results
 
 @click.group()
 def cli():
@@ -16,7 +26,7 @@ def cli():
 @click.option('--opset', type=int, default=13, help='ONNX opset version')
 def convert(model_type: str, model_path: str, output: str, opset: int):
     """Convert a PyTorch or TensorFlow model to ONNX format"""
-    from ..converters import convert_model
+    from wronai_edge.converters import convert_model
     
     try:
         output_path = convert_model(model_type, model_path, output, opset)
@@ -106,7 +116,7 @@ def benchmark(
         raise click.Abort()
 
 # Import other command groups
-from . import benchmark as benchmark_commands
+from wronai_edge.cli import benchmark as benchmark_commands
 
 if __name__ == '__main__':
     cli()
