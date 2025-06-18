@@ -44,7 +44,14 @@ def cli():
 @click.option('--output-json', type=click.Path(), help='Output JSON file for validation results')
 def test_model(model_path, output_json=None):
     """Mock test-model command."""
+    # Import here to avoid circular imports
+    from wronai_edge.models.validator import validate_model
+    result = validate_model(model_path)
     click.echo("Model validation successful")
+    if output_json:
+        import json
+        with open(output_json, 'w') as f:
+            json.dump(result, f)
     return 0
 
 
@@ -61,8 +68,14 @@ def convert():
 @click.argument('output_file', type=click.Path())
 def convert_pytorch(input_file, output_file):
     """Convert PyTorch model to ONNX."""
-    click.echo(f"Successfully converted {input_file} to {output_file}")
-    return 0
+    from wronai_edge.models.converter import convert_pytorch_to_onnx
+    success = convert_pytorch_to_onnx(input_file, output_file)
+    if success:
+        click.echo(f"Successfully converted {input_file} to {output_file}")
+        return 0
+    else:
+        click.echo(f"Failed to convert {input_file}", err=True)
+        return 1
 
 
 # Add keras subcommand
@@ -71,8 +84,14 @@ def convert_pytorch(input_file, output_file):
 @click.argument('output_file', type=click.Path())
 def convert_keras(input_file, output_file):
     """Convert Keras model to ONNX."""
-    click.echo(f"Successfully converted {input_file} to {output_file}")
-    return 0
+    from wronai_edge.models.converter import convert_keras_to_onnx
+    success = convert_keras_to_onnx(input_file, output_file)
+    if success:
+        click.echo(f"Successfully converted {input_file} to {output_file}")
+        return 0
+    else:
+        click.echo(f"Failed to convert {input_file}", err=True)
+        return 1
 
 
 # Add savedmodel subcommand
@@ -81,8 +100,14 @@ def convert_keras(input_file, output_file):
 @click.argument('output_file', type=click.Path())
 def convert_savedmodel(model_dir, output_file):
     """Convert TensorFlow SavedModel to ONNX."""
-    click.echo(f"Successfully converted {model_dir} to {output_file}")
-    return 0
+    from wronai_edge.models.converter import convert_savedmodel_to_onnx
+    success = convert_savedmodel_to_onnx(model_dir, output_file)
+    if success:
+        click.echo(f"Successfully converted {model_dir} to {output_file}")
+        return 0
+    else:
+        click.echo(f"Failed to convert {model_dir}", err=True)
+        return 1
 
 @pytest.fixture
 def runner():
