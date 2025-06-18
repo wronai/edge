@@ -1,6 +1,6 @@
 # Edge AI Platform
 
-A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, and model conversion tools.
+A comprehensive Edge AI platform with LLM (Ollama) and ML (ONNX Runtime) serving capabilities, monitoring, model conversion, and benchmarking tools.
 
 ## 🛠️ Model Conversion & Validation Tools
 
@@ -24,6 +24,28 @@ pip install -e .[all]
 
 ### CLI Usage
 
+#### Model Benchmarking
+
+Benchmark ONNX models for performance metrics:
+
+```bash
+# Benchmark a single model
+edge-ai benchmark path/to/model.onnx --input-shape 1,3,224,224
+
+# Compare multiple models
+edge-ai benchmark model1.onnx model2.onnx --compare --input-shape 1,3,224,224
+
+# Customize benchmark parameters
+edge-ai benchmark model.onnx --warmup 20 --runs 200 --cpu
+```
+
+Options:
+- `--input-shape`, `-i`: Input shape (can be specified multiple times for multiple inputs)
+- `--warmup`: Number of warmup runs (default: 10)
+- `--runs`: Number of benchmark runs (default: 100)
+- `--cpu/--gpu`: Force CPU or GPU usage (default: GPU if available)
+- `--compare`: Compare multiple models side by side
+
 #### Model Validation
 
 Validate an ONNX model:
@@ -38,7 +60,7 @@ Options:
 
 Example:
 ```bash
-edge-ai test-model models/my_model.onnx --output-json validation_results.json --verbose
+edge-ai test-model models/simple-model.onnx --output-json validation_results.json --verbose
 ```
 
 #### Model Conversion
@@ -447,7 +469,7 @@ Contributions are welcome! Please see our [Contributing Guide](./CONTRIBUTING.md
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache Software License - see the [LICENSE](LICENSE) file for details.
 
 ## 📧 Contact
 

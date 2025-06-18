@@ -186,6 +186,21 @@ test: ## Run tests
 	fi
 	@echo "${GREEN}✓ All tests passed!${RESET}"
 
+
+# Testing targets
+test2: ## Run all tests
+	@echo "Running all tests..."
+	poetry run pytest
+
+# Unit and integration tests
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	poetry run pytest -m "unit"
+
+test-integration: ## Run integration tests only
+	@echo "Running integration tests..."
+	poetry run pytest -m "integration"
+
 # ===== Monitoring =====
 monitor: ## Show monitoring URLs
 	@echo "\n${YELLOW}=== Monitoring URLs ===${RESET}"
@@ -234,3 +249,23 @@ check-ports: ## Check if required ports are available
 			echo "${GREEN}✓ Port $$port is available${RESET}"; \
 		fi; \
 	done
+
+
+# Documentation targets
+docs: ## Build documentation
+	poetry run mkdocs build
+
+
+build: ## Build the package
+	poetry version patch
+	poetry build
+
+publish-test: build ## Publish to test PyPI
+	poetry publish -r testpypi
+
+publish: build ## Publish to PyPI
+	poetry publish
+
+# Development targets
+run: ## Run domd on current directory
+	poetry run edge-ai run --config edge-ai.yaml

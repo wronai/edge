@@ -6,6 +6,7 @@ dist
 node_modules
 models
 .tox
+poetry.lock
 .vault_pass
 .backup.*
 .backup.

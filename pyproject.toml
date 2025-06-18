@@ -1,9 +1,9 @@
 [tool.poetry]
-name = "edge-ai"
-version = "0.1.0"
+name = "wronai-edge"
+version = "0.1.3"
 description = "Edge AI deployment and management tools"
 authors = ["Your Name <your.email@example.com>"]
-license = "MIT"
+license = "Apache"
 readme = "README.md"
 packages = [
     { include = "edge_ai", from = "src" },
