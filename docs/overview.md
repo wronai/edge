@@ -218,8 +218,8 @@ make monitor
    docker ps -a
    
    # View container logs
-   docker logs edge-ai-ollama
-   docker logs edge-ai-onnx
+   docker logs wronai_edge-ollama
+   docker logs wronai_edge-onnx
    ```
 
 3. **Cleanup**

@@ -1,4 +1,4 @@
-edge-ai-portfolio/
+wronai_edge-portfolio/
 ├── terraform/
 │   └── main.tf                 # Cała infrastruktura w jednym pliku
 ├── k8s/

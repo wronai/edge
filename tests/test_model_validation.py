@@ -10,7 +10,7 @@ import shutil
 import tempfile
 
 # Import the validator module
-from edge_ai.models.validator import validate_model
+from wronai_edge.models.validator import validate_model
 
 # Create a temporary directory for test models
 test_models_dir = Path("tests/test_models")

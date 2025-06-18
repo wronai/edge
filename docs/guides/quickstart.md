@@ -118,5 +118,5 @@ rm -rf ~/.ollama/models
 ## Need Help?
 
 - [Open an Issue](https://github.com/wronai/edge/issues)
-- [Join our Discord](https://discord.gg/edge-ai)
+- [Join our Discord](https://discord.gg/wronai_edge)
 - Check out the [FAQ](../faq.md)

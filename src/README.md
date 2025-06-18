@@ -18,7 +18,7 @@ A Python package for testing and building machine learning models for edge deplo
 
 2. Clone this repository and install dependencies:
    ```bash
-   cd edge_ai
+   cd wronai_edge
    poetry install
    ```
 
@@ -33,14 +33,14 @@ A Python package for testing and building machine learning models for edge deplo
 
 ```bash
 # Test an ONNX model
-poetry run edge-ai test-model --model-path path/to/your/model.onnx
+poetry run wronai_edge test-model --model-path path/to/your/model.onnx
 ```
 
 ### Converting a PyTorch Model to ONNX
 
 ```bash
 # Convert a PyTorch model to ONNX
-poetry run edge-ai convert-model \
+poetry run wronai_edge convert-model \
     --model-path path/to/your/model.pt \
     --output-path path/to/output/model.onnx \
     --input-shape 3,224,224

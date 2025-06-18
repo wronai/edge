@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 # Import the CLI module
-from edge_ai.cli import cli  # noqa: E402
+from wronai_edge.cli import cli  # noqa: E402
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def test_cli_help(runner):
 
 def test_test_model_command(runner):
     """Test the test-model command with a mock model."""
-    with patch("edge_ai.models.validator.validate_model") as mock_validate:
+    with patch("wronai_edge.models.validator.validate_model") as mock_validate:
         # Mock the validation result
         mock_validate.return_value = {
             "model_info": {"format": "ONNX", "version": 8},
@@ -64,7 +64,7 @@ def test_test_model_command(runner):
         assert "Successfully converted Keras model" in result.output
         mock_convert.assert_called_once()
 
-@patch("edge_ai.cli.convert_saved_model")
+@patch("wronai_edge.cli.convert_saved_model")
 def test_convert_saved_model_command(mock_convert, runner, temp_dir):
     """Test the convert saved-model command."""
     # Setup mock

@@ -52,7 +52,7 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
       external_labels:
-        cluster: 'edge-ai-cluster'
+        cluster: 'wronai_edge-cluster'
         environment: 'demo'
     
     rule_files:
@@ -665,7 +665,7 @@ data:
   alertmanager.yml: |
     global:
       smtp_smarthost: 'localhost:587'
-      smtp_from: 'alerts@edge-ai.local'
+      smtp_from: 'alerts@wronai_edge.local'
     
     route:
       group_by: ['alertname']

@@ -91,13 +91,13 @@ helm install nginx-ingress ingress-nginx/ingress-nginx \
 
 ```bash
 # Create namespace
-kubectl create namespace edge-ai
+kubectl create namespace wronai_edge
 
 # Deploy using kustomize
 kubectl apply -k k8s/overlays/prod
 
 # Check deployment status
-kubectl -n edge-ai get all
+kubectl -n wronai_edge get all
 ```
 
 ## 🔧 Configuration
@@ -151,10 +151,10 @@ docker-compose up -d --force-recreate
 
 ```bash
 # Update the deployment
-kubectl -n edge-ai rollout restart deployment
+kubectl -n wronai_edge rollout restart deployment
 
 # Watch the rollout status
-kubectl -n edge-ai rollout status deployment/edge-ai
+kubectl -n wronai_edge rollout status deployment/wronai_edge
 ```
 
 ## 🔒 Security
@@ -209,7 +209,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'edge-ai-services'
+  - job_name: 'wronai_edge-services'
     static_configs:
       - targets: ['ollama:11434', 'onnx-runtime:8001']
   - job_name: 'node'

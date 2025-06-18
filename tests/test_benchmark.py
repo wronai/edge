@@ -4,7 +4,7 @@ import os
 import pytest
 import numpy as np
 from pathlib import Path
-from edge_ai.benchmark import benchmark_model, compare_models
+from wronai_edge.benchmark import benchmark_model, compare_models
 
 # Create a simple ONNX model for testing
 @pytest.fixture(scope="module")

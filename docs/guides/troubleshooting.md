@@ -162,8 +162,8 @@ docker stats --no-stream
 
 ### Support Resources
 - [GitHub Issues](https://github.com/wronai/edge/issues)
-- [Documentation](https://docs.edge-ai.wron.ai)
-- [Community Forum](https://community.edge-ai.wron.ai)
+- [Documentation](https://docs.wronai_edge.wron.ai)
+- [Community Forum](https://community.wronai_edge.wron.ai)
 
 ## Known Issues
 

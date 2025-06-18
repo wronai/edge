@@ -75,9 +75,9 @@ run_diagnosis() {
     docker network ls
     echo
 
-    if docker network ls | grep "edge-ai" >/dev/null; then
+    if docker network ls | grep "wronai_edge" >/dev/null; then
         log_info "✅ Edge AI network exists"
-        docker network inspect edge-ai-net 2>/dev/null || log_warn "Edge AI network details not available"
+        docker network inspect wronai_edge-net 2>/dev/null || log_warn "Edge AI network details not available"
     else
         log_warn "❌ Edge AI network not found"
     fi
@@ -165,7 +165,7 @@ fix_k3s_deployment() {
     log_info "Cleaning up existing resources..."
     docker stop k3s-server 2>/dev/null || true
     docker rm k3s-server 2>/dev/null || true
-    docker network rm edge-ai-net 2>/dev/null || true
+    docker network rm wronai_edge-net 2>/dev/null || true
 
     # Clean up Terraform state if corrupted
     if [[ -d "terraform" ]]; then
@@ -196,7 +196,7 @@ deploy_docker_compose_fallback() {
 services:
   ollama:
     image: ollama/ollama:latest
-    container_name: edge-ai-ollama
+    container_name: wronai_edge-ollama
     ports:
       - "11435:11434"
     volumes:
@@ -212,7 +212,7 @@ services:
 
   onnx-runtime:
     image: mcr.microsoft.com/onnxruntime/server:latest
-    container_name: edge-ai-onnx
+    container_name: wronai_edge-onnx
     ports:
       - "8001:8001"
     environment:
@@ -226,7 +226,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: edge-ai-prometheus
+    container_name: wronai_edge-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -241,7 +241,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: edge-ai-grafana
+    container_name: wronai_edge-grafana
     ports:
       - "3007:3000"
     environment:
@@ -253,7 +253,7 @@ services:
 
   nginx-gateway:
     image: nginx:alpine
-    container_name: edge-ai-gateway
+    container_name: wronai_edge-gateway
     ports:
       - "30080:80"
     volumes:

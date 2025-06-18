@@ -2,7 +2,7 @@
 Example script demonstrating TensorFlow model conversion to ONNX.
 
 This script shows how to convert different types of TensorFlow models to ONNX format
-using the edge_ai package.
+using the wronai_edge package.
 """
 
 import os
@@ -10,8 +10,8 @@ import numpy as np
 import tensorflow as tf
 from pathlib import Path
 
-# Import the edge_ai package
-from edge_ai.models import (
+# Import the wronai_edge package
+from wronai_edge.models import (
     convert_keras_model,
     convert_saved_model,
     convert_tf_function,

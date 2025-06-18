@@ -49,7 +49,7 @@
       - model: "llama3.2:1b"
         prompt: "Hello, test response"
         expected_keys: ["response", "model"]
-      - model: "edge-ai-assistant"
+      - model: "wronai_edge-assistant"
         prompt: "What is DevOps?"
         expected_keys: ["response"]
 
@@ -378,7 +378,7 @@
           loop: "{{ test_prompts[0].expected_keys }}"
           when: llm_test_basic.status == 200
 
-        - name: Test custom edge-ai-assistant model
+        - name: Test custom wronai_edge-assistant model
           uri:
             url: "{{ working_ollama_url }}/api/generate"
             method: POST

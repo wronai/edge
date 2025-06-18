@@ -65,7 +65,7 @@ all:
               - model: "llama3.2:1b"
                 prompt: "Hello, this is a test"
                 timeout: 60
-              - model: "edge-ai-assistant"
+              - model: "wronai_edge-assistant"
                 prompt: "What is edge computing?"
                 timeout: 90
 
@@ -144,7 +144,7 @@ all:
 all:
   vars:
     # Project metadata
-    project_name: "edge-ai-devops-portfolio"
+    project_name: "wronai_edge-devops-portfolio"
     project_version: "1.0.0"
     author: "Tom Sapletta"
 

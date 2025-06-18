@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from edge_ai.models.validator import validate_model
+from wronai_edge.models.validator import validate_model
 
 # This is a simple test model that should be available in the tests directory
 TEST_MODEL_PATH = Path(__file__).parent / "test_data" / "test_model.onnx"

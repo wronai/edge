@@ -106,7 +106,7 @@ chmod +x verify-k8s.sh
 ### **For maximum reliability:**
 ```bash
 # 1. Use KIND (most reliable)
-kind create cluster --name edge-ai --config kind-config.yaml
+kind create cluster --name wronai_edge --config kind-config.yaml
 
 # 2. Deploy everything
 kubectl apply -f k8s/ai-platform.yaml
@@ -138,8 +138,8 @@ docker system df
 docker system prune -f
 
 # Restart KIND cluster
-kind delete cluster --name edge-ai
-kind create cluster --name edge-ai --config kind-config.yaml
+kind delete cluster --name wronai_edge
+kind create cluster --name wronai_edge --config kind-config.yaml
 ```
 
 ### **If services don't start:**

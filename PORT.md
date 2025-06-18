@@ -25,7 +25,7 @@ kubectl apply -f argocd/bootstrap/
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=argocd-server
 
 # Application deployment
-kubectl apply -f argocd/applications/edge-ai-platform.yaml
+kubectl apply -f argocd/applications/wronai_edge-platform.yaml
 
 # Monitoring verification
 kubectl port-forward svc/grafana 3007:3000

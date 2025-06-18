@@ -30,13 +30,13 @@ Benchmark ONNX models for performance metrics:
 
 ```bash
 # Benchmark a single model
-edge-ai benchmark path/to/model.onnx --input-shape 1,3,224,224
+wronai_edge benchmark path/to/model.onnx --input-shape 1,3,224,224
 
 # Compare multiple models
-edge-ai benchmark model1.onnx model2.onnx --compare --input-shape 1,3,224,224
+wronai_edge benchmark model1.onnx model2.onnx --compare --input-shape 1,3,224,224
 
 # Customize benchmark parameters
-edge-ai benchmark model.onnx --warmup 20 --runs 200 --cpu
+wronai_edge benchmark model.onnx --warmup 20 --runs 200 --cpu
 ```
 
 Options:
@@ -51,7 +51,7 @@ Options:
 Validate an ONNX model:
 
 ```bash
-edge-ai test-model path/to/model.onnx
+wronai_edge test-model path/to/model.onnx
 ```
 
 Options:
@@ -60,7 +60,7 @@ Options:
 
 Example:
 ```bash
-edge-ai test-model models/simple-model.onnx --output-json validation_results.json --verbose
+wronai_edge test-model models/simple-model.onnx --output-json validation_results.json --verbose
 ```
 
 #### Model Conversion
@@ -69,17 +69,17 @@ Convert models between different formats using the `convert` command group.
 
 **PyTorch to ONNX:**
 ```bash
-edge-ai convert pytorch model.pt output.onnx --input-shape 1,3,224,224
+wronai_edge convert pytorch model.pt output.onnx --input-shape 1,3,224,224
 ```
 
 **Keras to ONNX:**
 ```bash
-edge-ai convert keras model.h5 output.onnx --input-shape 1,224,224,3
+wronai_edge convert keras model.h5 output.onnx --input-shape 1,224,224,3
 ```
 
 **TensorFlow SavedModel to ONNX:**
 ```bash
-edge-ai convert saved-model saved_model_dir output.onnx
+wronai_edge convert saved-model saved_model_dir output.onnx
 ```
 
 Common options for conversion:
@@ -91,7 +91,7 @@ Common options for conversion:
 You can also use the conversion and validation tools programmatically:
 
 ```python
-from edge_ai import validate_model, convert_to_onnx
+from wronai_edge import validate_model, convert_to_onnx
 
 # Validate a model
 results = validate_model("model.onnx")
@@ -515,7 +515,7 @@ edge-prometheus-1   prom/prometheus:latest   "/bin/prometheus --c…"   promethe
 - **📈 Prometheus**: http://localhost:30090
 
 ```bash
-edge-ai-portfolio/
+wronai_edge-portfolio/
 ├── terraform/main.tf          # Infrastruktura (K3s + Docker)
 ├── k8s/ai-platform.yaml       # AI workloady (ONNX + Ollama)
 ├── k8s/monitoring.yaml         # Monitoring (Prometheus + Grafana)
@@ -648,7 +648,7 @@ curl -X POST http://localhost:30080/api/generate \
 curl -X POST http://localhost:30080/api/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "edge-ai-assistant",
+    "model": "wronai_edge-assistant",
     "prompt": "How do I monitor Kubernetes pods?",
     "stream": false
   }'
@@ -691,8 +691,8 @@ output:
 ```bash
 ...
 - context:
-    cluster: kind-edge-ai
-    user: kind-edge-ai
+    cluster: kind-wronai_edge
+    user: kind-wronai_edge
 [STEP] 19:32:14 🔍 Testing service connectivity...
 //localhost:30080/health:AI Gateway: ❌ NOT RESPONDING
 //localhost:30090/-/healthy:Prometheus: ❌ NOT RESPONDING
@@ -852,7 +852,7 @@ kubectl delete -f k8s/ai-platform.yaml
 ## 📁 Project Structure
 
 ```
-edge-ai-portfolio/
+wronai_edge-portfolio/
 ├── terraform/
 │   └── main.tf                 # Complete infrastructure as code
 ├── k8s/

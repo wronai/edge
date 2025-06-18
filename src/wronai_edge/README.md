@@ -17,13 +17,13 @@ A Python package for converting and validating machine learning models, with a f
 
 ```bash
 # Install with PyTorch support
-pip install edge-ai[torch]
+pip install wronai_edge[torch]
 
 # Install with TensorFlow support
-pip install edge-ai[tensorflow]
+pip install wronai_edge[tensorflow]
 
 # Install with all dependencies
-pip install edge-ai[all]
+pip install wronai_edge[all]
 ```
 
 ## Usage
@@ -32,19 +32,19 @@ pip install edge-ai[all]
 
 ```bash
 # Validate an ONNX model
-edge-ai validate-model path/to/model.onnx
+wronai_edge validate-model path/to/model.onnx
 
 # Convert a PyTorch model to ONNX
-edge-ai convert-pytorch path/to/model.pt path/to/output.onnx --input-shape 1,3,224,224
+wronai_edge convert-pytorch path/to/model.pt path/to/output.onnx --input-shape 1,3,224,224
 
 # Convert a Keras model to ONNX
-edge-ai convert-keras path/to/keras_model path/to/output.onnx
+wronai_edge convert-keras path/to/keras_model path/to/output.onnx
 ```
 
 ### Python API
 
 ```python
-from edge_ai import validate_model, convert_to_onnx
+from wronai_edge import validate_model, convert_to_onnx
 
 # Validate a model
 results = validate_model("path/to/model.onnx")

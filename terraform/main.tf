@@ -11,8 +11,8 @@ terraform {
 provider "docker" {}
 
 # Network dla edge AI platform
-resource "docker_network" "edge_ai_network" {
-  name = "edge-ai-net"
+resource "docker_network" "wronai_edge_network" {
+  name = "wronai_edge-net"
   ipam_config {
     subnet = "172.20.0.0/16"
   }
@@ -53,7 +53,7 @@ resource "docker_container" "k3s_server" {
   env = [
     "K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml",
     "K3S_KUBECONFIG_MODE=666",
-    "K3S_TOKEN=edge-ai-token-2024"
+    "K3S_TOKEN=wronai_edge-token-2024"
   ]
 
   command = [
@@ -78,7 +78,7 @@ resource "docker_container" "k3s_server" {
   }
 
   networks_advanced {
-    name = docker_network.edge_ai_network.name
+    name = docker_network.wronai_edge_network.name
     ipv4_address = "172.20.0.10"
   }
 
@@ -111,7 +111,7 @@ resource "docker_container" "local_registry" {
   }
 
   networks_advanced {
-    name = docker_network.edge_ai_network.name
+    name = docker_network.wronai_edge_network.name
     ipv4_address = "172.20.0.20"
   }
 
@@ -129,7 +129,7 @@ resource "null_resource" "create_directories" {
     EOT
   }
 
-  depends_on = [docker_network.edge_ai_network]
+  depends_on = [docker_network.wronai_edge_network]
 }
 
 # Wait for K3s to be ready
@@ -201,7 +201,7 @@ output "prometheus_url" {
 
 output "network_info" {
   value = {
-    network_name = docker_network.edge_ai_network.name
+    network_name = docker_network.wronai_edge_network.name
     subnet       = "172.20.0.0/16"
     k3s_ip      = "172.20.0.10"
     registry_ip = "172.20.0.20"

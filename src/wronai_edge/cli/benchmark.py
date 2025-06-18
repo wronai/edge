@@ -25,10 +25,10 @@ def benchmark(
     
     Examples:
         # Benchmark a single model
-        edge-ai benchmark model.onnx -i 1,3,224,224
+        wronai_edge benchmark model.onnx -i 1,3,224,224
         
         # Compare multiple models
-        edge-ai benchmark model1.onnx model2.onnx --compare
+        wronai_edge benchmark model1.onnx model2.onnx --compare
     """
     if not model_paths:
         click.echo("Error: At least one model path must be provided.", err=True)

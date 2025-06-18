@@ -22,7 +22,7 @@ class MockTensorSpec:
 sys.modules['tensorflow'].TensorSpec = MockTensorSpec
 
 # Now import the CLI module
-from edge_ai.cli import cli  # noqa: E402
+from wronai_edge.cli import cli  # noqa: E402
 
 @pytest.fixture
 def runner():
@@ -35,7 +35,7 @@ def test_cli_help(runner):
     assert result.exit_code == 0
     assert "Usage: cli [OPTIONS] COMMAND [ARGS]..." in result.output
 
-@patch("edge_ai.models.validator.validate_model")
+@patch("wronai_edge.models.validator.validate_model")
 def test_test_model_command(mock_validate, runner, tmp_path):
     """Test the test-model command with a mock model."""
     # Mock the validation result
@@ -64,7 +64,7 @@ def test_test_model_command(mock_validate, runner, tmp_path):
     assert "Model validation successful" in result.output
     assert output_json.exists()
 
-@patch("edge_ai.cli.convert_pytorch_to_onnx")
+@patch("wronai_edge.cli.convert_pytorch_to_onnx")
 def test_convert_pytorch_command(mock_convert, runner, tmp_path):
     """Test the convert pytorch command with a mock model."""
     mock_convert.return_value = True
@@ -83,7 +83,7 @@ def test_convert_pytorch_command(mock_convert, runner, tmp_path):
     assert "Successfully converted" in result.output
     mock_convert.assert_called_once()
 
-@patch("edge_ai.cli.convert_keras_to_onnx")
+@patch("wronai_edge.cli.convert_keras_to_onnx")
 def test_convert_keras_command(mock_convert, runner, tmp_path):
     """Test the convert keras command with a mock model."""
     mock_convert.return_value = True
@@ -102,7 +102,7 @@ def test_convert_keras_command(mock_convert, runner, tmp_path):
     assert "Successfully converted" in result.output
     mock_convert.assert_called_once()
 
-@patch("edge_ai.cli.convert_savedmodel_to_onnx")
+@patch("wronai_edge.cli.convert_savedmodel_to_onnx")
 def test_convert_savedmodel_command(mock_convert, runner, tmp_path):
     """Test the convert savedmodel command with a mock model."""
     mock_convert.return_value = True

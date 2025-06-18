@@ -14,10 +14,10 @@ kind version
 ### **Deploy with KIND:**
 ```bash
 # 2. Create cluster
-kind create cluster --name edge-ai --config kind-config.yaml
+kind create cluster --name wronai_edge --config kind-config.yaml
 
 # 3. Verify cluster
-kubectl cluster-info --context kind-edge-ai
+kubectl cluster-info --context kind-wronai_edge
 kubectl get nodes
 
 # 4. Deploy AI platform
@@ -55,17 +55,17 @@ open http://localhost:30090  # Prometheus
 # 1. Clean previous attempts
 docker stop k3s-server 2>/dev/null || true
 docker rm k3s-server 2>/dev/null || true
-docker network rm edge-ai-net 2>/dev/null || true
+docker network rm wronai_edge-net 2>/dev/null || true
 
 # 2. Create network first
-docker network create --subnet=172.20.0.0/16 edge-ai-net
+docker network create --subnet=172.20.0.0/16 wronai_edge-net
 
 # 3. Run K3s with better configuration
 docker run -d \
   --name k3s-server \
   --privileged \
   --restart unless-stopped \
-  --net edge-ai-net \
+  --net wronai_edge-net \
   --ip 172.20.0.10 \
   -p 6443:6443 \
   -p 30080:30080 \
@@ -112,14 +112,14 @@ touch ~/.kube/config
 chmod 644 ~/.kube/config
 
 # 2. Clean up the problematic cluster (if exists)
-kind delete cluster --name edge-ai 2>/dev/null || true
+kind delete cluster --name wronai_edge 2>/dev/null || true
 
 # 3. Create cluster again
-kind create cluster --name edge-ai --config kind-config.yaml
+kind create cluster --name wronai_edge --config kind-config.yaml
 
 # 4. Set kubeconfig to local file (bypass ~/.kube)
 mkdir -p kubeconfig
-kind get kubeconfig --name edge-ai > kubeconfig/kubeconfig.yaml
+kind get kubeconfig --name wronai_edge > kubeconfig/kubeconfig.yaml
 export KUBECONFIG="$(pwd)/kubeconfig/kubeconfig.yaml"
 
 # 5. Test cluster
@@ -131,11 +131,11 @@ kubectl get nodes
 
 ```bash
 # 1. Delete cluster if it exists
-kind delete cluster --name edge-ai 2>/dev/null || true
+kind delete cluster --name wronai_edge 2>/dev/null || true
 
 # 2. Create cluster with explicit kubeconfig
 mkdir -p kubeconfig
-kind create cluster --name edge-ai --config kind-config.yaml --kubeconfig kubeconfig/kubeconfig.yaml
+kind create cluster --name wronai_edge --config kind-config.yaml --kubeconfig kubeconfig/kubeconfig.yaml
 
 # 3. Use local kubeconfig
 export KUBECONFIG="$(pwd)/kubeconfig/kubeconfig.yaml"
@@ -154,9 +154,9 @@ mkdir -p ~/.kube kubeconfig && \
 chmod 755 ~/.kube && \
 touch ~/.kube/config && \
 chmod 644 ~/.kube/config && \
-kind delete cluster --name edge-ai 2>/dev/null || true && \
-kind create cluster --name edge-ai --config kind-config.yaml && \
-kind get kubeconfig --name edge-ai > kubeconfig/kubeconfig.yaml && \
+kind delete cluster --name wronai_edge 2>/dev/null || true && \
+kind create cluster --name wronai_edge --config kind-config.yaml && \
+kind get kubeconfig --name wronai_edge > kubeconfig/kubeconfig.yaml && \
 export KUBECONFIG="$(pwd)/kubeconfig/kubeconfig.yaml" && \
 kubectl cluster-info
 ```
@@ -197,7 +197,7 @@ kind get clusters
 docker ps | grep kindest
 
 # If cluster exists, just get kubeconfig
-kind get kubeconfig --name edge-ai > kubeconfig/kubeconfig.yaml
+kind get kubeconfig --name wronai_edge > kubeconfig/kubeconfig.yaml
 export KUBECONFIG="$(pwd)/kubeconfig/kubeconfig.yaml"
 kubectl get nodes
 ```
@@ -205,20 +205,20 @@ kubectl get nodes
 ## 📊 **Expected Success Output:**
 
 ```bash
-Creating cluster "edge-ai" ...
+Creating cluster "wronai_edge" ...
  ✓ Ensuring node image (kindest/node:v1.27.3) 🖼 
  ✓ Preparing nodes 📦  
  ✓ Writing configuration 📜 
  ✓ Starting control-plane 🕹️ 
  ✓ Installing CNI 🔌 
  ✓ Installing StorageClass 💾 
-Set kubectl context to "kind-edge-ai"
+Set kubectl context to "kind-wronai_edge"
 You can now use your cluster with:
 
-kubectl cluster-info --context kind-edge-ai
+kubectl cluster-info --context kind-wronai_edge
 
 NAME                     STATUS   ROLES           AGE   VERSION
-edge-ai-control-plane   Ready    control-plane   30s   v1.27.3
+wronai_edge-control-plane   Ready    control-plane   30s   v1.27.3
 ```
 
 
@@ -249,7 +249,7 @@ Let's diagnose why the node is NotReady:
 
 ```bash
 # Get detailed node information
-kubectl describe node edge-ai-control-plane
+kubectl describe node wronai_edge-control-plane
 
 # Check system pods status
 kubectl get pods -n kube-system
@@ -271,7 +271,7 @@ kubectl get pods -n kube-system
 
 # Once ready, you should see something like:
 # NAME                    STATUS   ROLES           AGE   VERSION
-# edge-ai-control-plane   Ready    control-plane   2m    v1.27.3
+# wronai_edge-control-plane   Ready    control-plane   2m    v1.27.3
 ```
 
 

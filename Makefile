@@ -231,13 +231,13 @@ lint: ## Lint code using flake8 and shellcheck
 # ===== Kubernetes =====
 kind-create: ## Create a local Kubernetes cluster using Kind
 	@echo "${GREEN}Creating Kind cluster...${RESET}"
-	kind create cluster --name edge-ai --config kind-config.yaml
+	kind create cluster --name wronai_edge --config kind-config.yaml
 	@echo "${YELLOW}Installing Calico CNI...${RESET}"
 	kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 kind-delete: ## Delete the Kind cluster
 	@echo "${RED}Deleting Kind cluster...${RESET}"
-	kind delete cluster --name edge-ai
+	kind delete cluster --name wronai_edge
 
 # ===== Utils =====
 check-ports: ## Check if required ports are available
@@ -268,4 +268,4 @@ publish: build ## Publish to PyPI
 
 # Development targets
 run: ## Run domd on current directory
-	poetry run edge-ai run --config edge-ai.yaml
+	poetry run wronai_edge run --config wronai_edge.yaml
