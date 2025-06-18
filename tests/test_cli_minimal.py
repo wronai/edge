@@ -1,22 +1,27 @@
 """Minimal tests for the Edge AI CLI commands with complete mocking."""
 
-import os
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 from click.testing import CliRunner
 
+# Mock torch and other required modules before importing wronai_edge
+sys.modules['torch'] = MagicMock()
+sys.modules['onnx'] = MagicMock()
+sys.modules['onnxruntime'] = MagicMock()
+
 # Add the project root to the Python path
 project_root = str(Path(__file__).parent.parent)
 sys.path.insert(0, project_root)
 
-# Now import the CLI module
-try:
+# Mock the wronai_edge modules
+with patch.dict('sys.modules', {
+    'wronai_edge.models': MagicMock(),
+    'wronai_edge.models.validator': MagicMock(),
+    'wronai_edge.converters': MagicMock(),
+}):
     from wronai_edge.cli import cli as cli_command
-except ImportError as e:
-    print(f"Error importing wronai_edge.cli: {e}")
-    raise
 
 # Mock the validator
 @pytest.fixture(autouse=True)
